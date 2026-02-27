@@ -1,46 +1,37 @@
-<div x-data="ocremixState()" @download-finished.window="fetchStats()">
+<div x-data="ocrState()" @download-finished.window="getStats()">
     <div class="grid grid-cols-2 gap-4 mb-6">
-        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg text-center">
-            <span class="block text-xs text-slate-400 uppercase font-bold mb-1">Latest Online ID</span>
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
+            <span class="block text-xs text-slate-400 uppercase font-bold">Latest Online</span>
             <span class="text-xl font-mono text-indigo-400" x-text="stats.latest_online"></span>
         </div>
-        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg text-center">
-            <span class="block text-xs text-slate-400 uppercase font-bold mb-1">Your Local ID</span>
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
+            <span class="block text-xs text-slate-400 uppercase font-bold">Your Local</span>
             <span class="text-xl font-mono text-emerald-400" x-text="stats.last_downloaded"></span>
         </div>
     </div>
 
-    <div class="flex flex-col md:flex-row gap-4 mb-6 bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
+    <div class="mb-6 bg-indigo-900/30 p-4 rounded-lg border border-indigo-500/30 text-sm text-indigo-200">
+        <strong>Supported Formats:</strong> Range (100-110), List (1,5,10), or Mixed (1-5,10).
+    </div>
+
+    <div class="flex flex-col md:flex-row gap-4 mb-6 bg-slate-800 p-4 rounded-xl border border-slate-700">
         <div class="flex-1 flex flex-col gap-2">
-            <input type="text" x-model="ocrIds" :disabled="loadingDownload"
-                   placeholder="Enter IDs (e.g. 123 150 200)" 
-                   class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none">
-            <label class="flex items-center text-sm text-slate-400 cursor-pointer">
-                <input type="checkbox" x-model="ocrMissingOnly" class="mr-2 rounded bg-slate-900 text-indigo-500">
-                Missing Only
-            </label>
+            <input type="text" x-model="ids" placeholder="Enter IDs (e.g. 100-120, 205)" class="bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none">
+            <label class="flex items-center text-xs text-slate-400"><input type="checkbox" x-model="miss" class="mr-2"> Missing Only</label>
         </div>
-        
-        <button @click="$dispatch('start-download', {provider: 'ocremix', payload: {ids: ocrIds, missing_only: ocrMissingOnly}})" 
-                :disabled="!ocrIds || loadingDownload" 
-                class="bg-indigo-600 hover:bg-indigo-500 px-6 py-2 rounded-lg font-bold disabled:opacity-50 transition-all h-fit">
-            Start Download
-        </button>
+        <button @click="$dispatch('start-download', {provider: 'ocremix', payload: {ids: ids, missing_only: miss}})" class="bg-indigo-600 hover:bg-indigo-500 px-6 py-2 rounded-lg font-bold">Start</button>
     </div>
 </div>
-
 <script>
-function ocremixState() {
+function ocrState() {
     return {
-        ocrIds: '', ocrMissingOnly: false, stats: { latest_online: '...', last_downloaded: '...' },
-        init() { this.fetchStats(); },
-        async fetchStats() {
-            try {
-                const res = await fetch('/api/info/ocremix');
-                const data = await res.json();
-                this.stats.latest_online = data.latest_online !== "Unknown" ? `OCR${String(data.latest_online).padStart(5, '0')}` : "Unknown";
-                this.stats.last_downloaded = `OCR${String(data.last_downloaded).padStart(5, '0')}`;
-            } catch (e) {}
+        ids: '', miss: false, stats: {latest_online: '...', last_downloaded: '...'},
+        init() { this.getStats(); },
+        async getStats() {
+            const r = await fetch('/api/info/ocremix');
+            const d = await r.json();
+            this.stats.latest_online = `OCR${String(d.latest_online).padStart(5, '0')}`;
+            this.stats.last_downloaded = `OCR${String(d.last_downloaded).padStart(5, '0')}`;
         }
     }
 }

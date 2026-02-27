@@ -17,6 +17,10 @@ PROVIDERS = {}
 
 def load_providers():
     providers_dir = os.path.join(os.path.dirname(__file__), 'providers')
+    # Ensure directory exists
+    if not os.path.exists(providers_dir):
+        os.makedirs(providers_dir)
+    
     for filename in os.listdir(providers_dir):
         if filename.endswith('.py') and filename not in ('__init__.py', 'base.py'):
             module_name = filename[:-3]
@@ -34,10 +38,8 @@ def load_providers():
 
 load_providers()
 
-# --- ROUTES ---
 @app.route('/')
 def index():
-    # Pass the list of loaded providers to the frontend
     return render_template('index.html', providers=list(PROVIDERS.values()))
 
 @app.route('/api/info/<provider_id>')

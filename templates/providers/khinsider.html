@@ -1,33 +1,27 @@
-<div x-data="khinsiderState()">
+<div x-data="khState()">
     <div class="flex flex-col md:flex-row gap-4 mb-6 bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
-        <input type="text" x-model="khQuery" @keyup.enter="searchKH" :disabled="loadingDownload"
-               placeholder="Search album name or paste URL..." 
-               class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
-        
-        <select x-model="khFormat" class="bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none">
-            <option value=".mp3">MP3</option>
-            <option value=".flac">FLAC</option>
+        <input type="text" x-model="q" @keyup.enter="doSearch" placeholder="Search album or paste URL..." class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none">
+        <select x-model="fmt" class="bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none">
+            <option value=".mp3">MP3</option><option value=".flac">FLAC</option>
         </select>
-
-        <button @click="searchKH" :disabled="loading || loadingDownload" 
-                class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-lg font-bold transition-all min-w-[140px]">
+        <button @click="doSearch" :disabled="loading" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-lg font-bold min-w-[140px]">
             <span x-show="loading" class="animate-pulse">Searching...</span>
-            <template x-if="!loading"><span x-text="khQuery.startsWith('http') ? 'Direct Download' : 'Search'"></span></template>
+            <span x-show="!loading" x-text="q.startsWith('http') ? 'Download' : 'Search'"></span>
         </button>
     </div>
 
-    <template x-if="khResults.length > 0">
-        <div class="bg-slate-800 rounded-xl overflow-hidden mb-8 border border-slate-700 shadow-md">
-            <table class="w-full text-left border-collapse">
+    <template x-if="results.length > 0">
+        <div class="bg-slate-800 rounded-xl overflow-hidden border border-slate-700 shadow-md">
+            <table class="w-full text-left">
                 <tbody class="divide-y divide-slate-700">
-                    <template x-for="res in khResults">
-                        <tr class="hover:bg-slate-700/30 transition-colors">
-                            <td class="p-4 font-medium" x-text="res.album"></td>
+                    <template x-for="res in results">
+                        <tr class="hover:bg-slate-700/30">
+                            <td class="p-4">
+                                <div class="font-medium" x-text="res.album"></div>
+                                <a :href="res.url" target="_blank" class="text-[10px] text-blue-400 hover:underline">🔗 Check on KHInsider</a>
+                            </td>
                             <td class="p-4 text-right">
-                                <button @click="$dispatch('start-download', {provider: 'khinsider', payload: {url: res.url, format: khFormat}})" 
-                                        class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2 px-4 rounded-lg">
-                                    Download
-                                </button>
+                                <button @click="$dispatch('start-download', {provider: 'khinsider', payload: {url: res.url, format: fmt}})" class="bg-emerald-600 hover:bg-emerald-500 text-xs font-bold py-2 px-4 rounded-lg">Download</button>
                             </td>
                         </tr>
                     </template>
@@ -36,22 +30,18 @@
         </div>
     </template>
 </div>
-
 <script>
-function khinsiderState() {
+function khState() {
     return {
-        khQuery: '', khFormat: '.flac', khResults: [], loading: false,
-        async searchKH() {
-            if (!this.khQuery.trim()) return;
-            if (this.khQuery.startsWith('http')) {
-                this.$dispatch('start-download', {provider: 'khinsider', payload: {url: this.khQuery.trim(), format: this.khFormat}});
-                return;
-            }
+        q: '', fmt: '.flac', results: [], loading: false,
+        async doSearch() {
+            if (!this.q.trim()) return;
+            if (this.q.startsWith('http')) { this.$dispatch('start-download', {provider: 'khinsider', payload: {url: this.q, format: this.fmt}}); return; }
             this.loading = true;
             try {
-                const res = await fetch('/api/search/khinsider', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({query: this.khQuery.trim()})});
-                this.khResults = (await res.json()).results || [];
-            } catch (err) {} finally { this.loading = false; }
+                const r = await fetch('/api/search/khinsider', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:this.q})});
+                this.results = (await r.json()).results || [];
+            } finally { this.loading = false; }
         }
     }
 }
