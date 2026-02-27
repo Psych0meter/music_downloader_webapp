@@ -1,7 +1,7 @@
 import os, re, requests
 from urllib.parse import unquote
 from bs4 import BeautifulSoup
-from providers.base import BaseProvider, DOWNLOAD_DIR, HEADERS
+from providers.base import BaseProvider, HEADERS
 
 class KHInsiderProvider(BaseProvider):
     id = "khinsider"
@@ -11,8 +11,7 @@ class KHInsiderProvider(BaseProvider):
         name = unquote(name)
         if is_album:
             name = re.sub(r'_?MP3_Soundtracks_for_FREE.*$|\s+MP3\s+Soundtracks\s+for\s+FREE.*$', '', name, flags=re.IGNORECASE)
-        name = re.sub(r'[\\/*?:"<>|]', "", name).replace(" ", "_")
-        return re.sub(r'__+', '_', name).strip('_')
+        return re.sub(r'[\\/*?:"<>|]', "", name).replace(" ", "_")
 
     def search(self, query):
         res = requests.get(f"https://downloads.khinsider.com/search?search={query.replace(' ', '+')}", headers=HEADERS)
@@ -27,14 +26,17 @@ class KHInsiderProvider(BaseProvider):
 
     def download(self, data):
         preferred_ext = data.get('format', '.flac')
-        yield {"line": "Analyzing tracks...", "progress": 0}
+        custom_folder = data.get('folder', '')
+        base_path = self.get_path(custom_folder)
+        
+        yield {"line": "Analyzing album...", "progress": 0}
         try:
             res = requests.get(data.get('url'), headers=HEADERS)
             soup = BeautifulSoup(res.text, 'html.parser')
             album_title = self._sanitize(soup.find("title").text.replace(" - Download", "").strip(), is_album=True)
             song_links = sorted(list(set(f"https://downloads.khinsider.com{a['href']}" for a in soup.find_all('a', href=True) if '/game-soundtracks/album/' in a['href'] and a['href'].endswith(('.mp3', '.flac', '.m4a')))))
             
-            album_path = os.path.join(DOWNLOAD_DIR, album_title)
+            album_path = os.path.join(base_path, album_title)
             os.makedirs(album_path, exist_ok=True)
 
             total = len(song_links)
@@ -51,6 +53,6 @@ class KHInsiderProvider(BaseProvider):
                 with requests.get(target_url, headers=HEADERS, stream=True) as r:
                     with open(os.path.join(album_path, file_name), 'wb') as f:
                         for chunk in r.iter_content(65536): f.write(chunk)
-            yield {"line": "<span class='text-emerald-400 font-bold'>=== FINISHED ===</span>", "progress": 100}
+            yield {"line": "<span class='text-emerald-400'>=== FINISHED ===</span>", "progress": 100}
         except Exception as e:
             yield {"line": f"<span class='text-red-400'>Error: {str(e)}</span>", "progress": 100}

@@ -1,17 +1,24 @@
 <div x-data="khState()">
-    <div class="flex flex-col md:flex-row gap-4 mb-6 bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
-        <input type="text" x-model="q" @keyup.enter="doSearch" placeholder="Search album or paste URL..." class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none">
-        <select x-model="fmt" class="bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 bg-slate-800 p-4 rounded-xl border border-slate-700">
+        <input type="text" x-model="q" placeholder="Search or URL..." class="md:col-span-2 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none">
+        
+        <div class="relative">
+            <input type="text" x-model="folder" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none text-sm text-emerald-400">
+            <span class="absolute -top-2 left-2 px-1 bg-slate-800 text-[10px] text-slate-500">Folder</span>
+        </div>
+        
+        <select x-model="fmt" class="bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none text-sm">
             <option value=".mp3">MP3</option><option value=".flac">FLAC</option>
         </select>
-        <button @click="doSearch" :disabled="loading" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-lg font-bold min-w-[140px]">
-            <span x-show="loading" class="animate-pulse">Searching...</span>
-            <span x-show="!loading" x-text="q.startsWith('http') ? 'Download' : 'Search'"></span>
-        </button>
     </div>
+    
+    <button @click="doSearch" :disabled="loading" class="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded-lg font-bold mb-6">
+        <span x-show="!loading" x-text="q.startsWith('http') ? 'Direct Download' : 'Search Albums'"></span>
+        <span x-show="loading">Working...</span>
+    </button>
 
     <template x-if="results.length > 0">
-        <div class="bg-slate-800 rounded-xl overflow-hidden border border-slate-700 shadow-md">
+        <div class="bg-slate-800 rounded-xl overflow-hidden border border-slate-700">
             <table class="w-full text-left">
                 <tbody class="divide-y divide-slate-700">
                     <template x-for="res in results">
@@ -21,7 +28,7 @@
                                 <a :href="res.url" target="_blank" class="text-[10px] text-blue-400 hover:underline">🔗 Check on KHInsider</a>
                             </td>
                             <td class="p-4 text-right">
-                                <button @click="$dispatch('start-download', {provider: 'khinsider', payload: {url: res.url, format: fmt}})" class="bg-emerald-600 hover:bg-emerald-500 text-xs font-bold py-2 px-4 rounded-lg">Download</button>
+                                <button @click="$dispatch('start-download', {provider: 'khinsider', payload: {url: res.url, format: fmt, folder: folder}})" class="bg-emerald-600 px-4 py-2 rounded-lg text-xs font-bold">Download</button>
                             </td>
                         </tr>
                     </template>
@@ -33,10 +40,13 @@
 <script>
 function khState() {
     return {
-        q: '', fmt: '.flac', results: [], loading: false,
+        q: '', fmt: '.flac', folder: '', results: [], loading: false,
+        async init() {
+            const res = await fetch('/api/info/khinsider');
+            this.folder = (await res.json()).default_path;
+        },
         async doSearch() {
-            if (!this.q.trim()) return;
-            if (this.q.startsWith('http')) { this.$dispatch('start-download', {provider: 'khinsider', payload: {url: this.q, format: this.fmt}}); return; }
+            if (this.q.startsWith('http')) { this.$dispatch('start-download', {provider: 'khinsider', payload: {url: this.q, format: this.fmt, folder: this.folder}}); return; }
             this.loading = true;
             try {
                 const r = await fetch('/api/search/khinsider', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:this.q})});

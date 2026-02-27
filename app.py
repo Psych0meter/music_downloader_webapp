@@ -12,21 +12,16 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# --- DYNAMIC PLUGIN LOADER ---
 PROVIDERS = {}
 
 def load_providers():
     providers_dir = os.path.join(os.path.dirname(__file__), 'providers')
-    # Ensure directory exists
-    if not os.path.exists(providers_dir):
-        os.makedirs(providers_dir)
+    if not os.path.exists(providers_dir): os.makedirs(providers_dir)
     
     for filename in os.listdir(providers_dir):
         if filename.endswith('.py') and filename not in ('__init__.py', 'base.py'):
             module_name = filename[:-3]
-            filepath = os.path.join(providers_dir, filename)
-            
-            spec = importlib.util.spec_from_file_location(module_name, filepath)
+            spec = importlib.util.spec_from_file_location(module_name, os.path.join(providers_dir, filename))
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             
@@ -34,7 +29,7 @@ def load_providers():
                 if inspect.isclass(obj) and issubclass(obj, BaseProvider) and obj is not BaseProvider:
                     inst = obj()
                     PROVIDERS[inst.id] = inst
-                    logger.info(f"Loaded provider: {inst.name} ({inst.id})")
+                    logger.info(f"Loaded: {inst.name}")
 
 load_providers()
 
@@ -44,31 +39,28 @@ def index():
 
 @app.route('/api/info/<provider_id>')
 def provider_info(provider_id):
-    if provider_id not in PROVIDERS: return jsonify({"error": "Provider not found"}), 404
+    if provider_id not in PROVIDERS: return jsonify({"error": "Not found"}), 404
     return jsonify(PROVIDERS[provider_id].get_info())
 
 @app.route('/api/search/<provider_id>', methods=['POST'])
 def search(provider_id):
-    if provider_id not in PROVIDERS: return jsonify({"error": "Provider not found"}), 404
-    try:
-        return jsonify({"results": PROVIDERS[provider_id].search(request.json.get('query', ''))})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    if provider_id not in PROVIDERS: return jsonify({"error": "Not found"}), 404
+    return jsonify({"results": PROVIDERS[provider_id].search(request.json.get('query', ''))})
 
 @app.route('/api/download/<provider_id>', methods=['POST'])
 def download(provider_id):
-    if provider_id not in PROVIDERS: return jsonify({"error": "Provider not found"}), 404
+    if provider_id not in PROVIDERS: return jsonify({"error": "Not found"}), 404
 
     def generate():
         try:
             for log_data in PROVIDERS[provider_id].download(request.json):
                 yield f"data: {json.dumps(log_data)}\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'line': f'<span class=\"text-red-400\">System Error: {str(e)}</span>', 'progress': 100})}\n\n"
+            yield f"data: {json.dumps({'line': f'<span class=\"text-red-400\">Error: {str(e)}</span>', 'progress': 100})}\n\n"
 
     return Response(stream_with_context(generate()), mimetype='text/event-stream', headers={
         'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no', 'Connection': 'keep-alive'
     })
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000)
