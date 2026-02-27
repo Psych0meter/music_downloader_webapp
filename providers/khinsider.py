@@ -1,0 +1,62 @@
+import os, re, requests
+from urllib.parse import unquote
+from bs4 import BeautifulSoup
+from providers.base import BaseProvider, DOWNLOAD_DIR, HEADERS
+
+class KHInsiderProvider(BaseProvider):
+    id = "khinsider"
+    name = "KHInsider"
+
+    def _sanitize_filename(self, name, is_album=False):
+        name = unquote(name)
+        if is_album:
+            name = re.sub(r'_?MP3_Soundtracks_for_FREE.*$|\s+MP3\s+Soundtracks\s+for\s+FREE.*$', '', name, flags=re.IGNORECASE)
+        name = re.sub(r'[\\/*?:"<>|]', "", name).replace(" ", "_")
+        return re.sub(r'__+', '_', name).strip('_')
+
+    def search(self, query):
+        search_url = f"https://downloads.khinsider.com/search?search={query.replace(' ', '+')}"
+        res = requests.get(search_url, headers=HEADERS)
+        soup = BeautifulSoup(res.text, 'html.parser')
+        
+        results = []
+        for row in soup.select('.albumList tr'):
+            cols = row.find_all('td')
+            if len(cols) > 1 and cols[1].find('a'):
+                link = cols[1].find('a')
+                results.append({'album': link.text.strip(), 'url': f"https://downloads.khinsider.com{link['href']}"})
+        return results
+
+    def download(self, data):
+        preferred_ext = data.get('format', '.flac')
+        yield {"line": "Analyzing album tracks...", "progress": 0}
+        
+        try:
+            res = requests.get(data.get('url'), headers=HEADERS)
+            soup = BeautifulSoup(res.text, 'html.parser')
+            album_title = self._sanitize_filename(soup.find("title").text.replace(" - Download", "").strip(), is_album=True)
+            
+            song_links = sorted(list(set(f"https://downloads.khinsider.com{a['href']}" for a in soup.find_all('a', href=True) if '/game-soundtracks/album/' in a['href'] and a['href'].endswith(('.mp3', '.flac', '.m4a')))))
+            
+            album_path = os.path.join(DOWNLOAD_DIR, album_title)
+            os.makedirs(album_path, exist_ok=True)
+
+            total = len(song_links)
+            for idx, page_url in enumerate(song_links, 1):
+                page_soup = BeautifulSoup(requests.get(page_url, headers=HEADERS).text, 'html.parser')
+                audio_links = [a['href'] for a in page_soup.find_all('a', href=True) if a['href'].endswith(('.mp3', '.flac', '.m4a'))]
+                
+                if not audio_links: continue
+                target_url = next((l for l in audio_links if l.endswith(preferred_ext)), audio_links[0])
+                file_name = self._sanitize_filename(os.path.basename(target_url))
+                
+                yield {"line": f"Track {idx}/{total}: {file_name}", "progress": int((idx / total) * 100)}
+                
+                with requests.get(target_url, headers=HEADERS, stream=True) as r:
+                    r.raise_for_status()
+                    with open(os.path.join(album_path, file_name), 'wb') as f:
+                        for chunk in r.iter_content(chunk_size=65536): f.write(chunk)
+
+            yield {"line": "<span class='text-emerald-400 font-bold'>=== FINISHED ===</span>", "progress": 100}
+        except Exception as e:
+            yield {"line": f"<span class='text-red-400'>Error: {str(e)}</span>", "progress": 100}

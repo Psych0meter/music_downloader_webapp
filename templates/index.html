@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modular Media Vault</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-4 md:p-8 font-sans">
+
+<div x-data="appMain()" @start-download.window="startDownload($event.detail.provider, $event.detail.payload)" class="max-w-3xl mx-auto" x-cloak>
+    
+    <div class="flex flex-col md:flex-row justify-between items-center md:items-end mb-8 gap-4">
+        <div>
+            <h1 class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">Media Vault</h1>
+        </div>
+        
+        <div class="bg-slate-800 p-1 rounded-lg flex border border-slate-700">
+            {% for p in providers %}
+            <button @click="switchProvider('{{ p.id }}')" 
+                    :class="provider === '{{ p.id }}' ? 'bg-slate-600 shadow-lg' : 'hover:bg-slate-700'" 
+                    :disabled="loadingDownload"
+                    class="px-4 py-2 rounded-md transition-all font-bold text-sm disabled:opacity-50">
+                {{ p.name }}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div x-show="loadingDownload || logs.length > 0" class="mb-8 bg-slate-800 rounded-xl p-6 border-2 border-slate-600 shadow-2xl mt-8">
+        <div class="mb-6">
+            <div class="flex justify-between mb-2">
+                <span x-html="status" class="text-slate-300 font-bold truncate max-w-[80%]"></span>
+                <span x-text="progress + '%'" class="text-slate-400 font-mono"></span>
+            </div>
+            <div class="w-full bg-slate-900 h-4 rounded-full overflow-hidden border border-slate-700">
+                <div class="bg-blue-500 h-full transition-all duration-500 ease-out" :style="`width: ${progress}%`"></div>
+            </div>
+        </div>
+        <div id="logBox" class="h-48 overflow-y-auto bg-slate-950 rounded-lg p-4 font-mono text-[12px] leading-relaxed text-slate-300 border border-slate-800">
+            <template x-for="log in logs"><div class="border-b border-white/5 pb-1 mb-1" x-html="log"></div></template>
+        </div>
+        <button x-show="!loadingDownload" @click="logs = []" class="mt-4 text-xs text-slate-500 hover:text-slate-300">Clear Logs</button>
+    </div>
+
+    {% for p in providers %}
+    <div x-show="provider === '{{ p.id }}'">
+        {% include 'providers/' ~ p.id ~ '.html' %}
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+function appMain() {
+    return {
+        provider: '{{ providers[0].id if providers else "" }}',
+        loadingDownload: false,
+        logs: [], progress: 0, status: 'Ready',
+
+        switchProvider(prov) {
+            if (!this.loadingDownload) this.provider = prov;
+        },
+
+        async startDownload(providerId, payload) {
+            this.loadingDownload = true;
+            this.logs = []; this.progress = 0; this.status = 'Connecting...';
+            
+            try {
+                const response = await fetch(`/api/download/${providerId}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const {value, done} = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value, {stream: true});
+                    chunk.split('\n\n').forEach(line => {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.replace('data: ', ''));
+                                if (data.line) { this.logs.push(data.line); this.status = data.line; }
+                                if (data.progress !== undefined) this.progress = data.progress;
+                                this.$nextTick(() => { 
+                                    const b = document.getElementById('logBox'); 
+                                    if (b) b.scrollTop = b.scrollHeight; 
+                                });
+                            } catch(e) {}
+                        }
+                    });
+                }
+            } catch (err) {
+                this.logs.push(`<span class='text-red-400'>Network Error: ${err.message}</span>`);
+            } finally {
+                this.loadingDownload = false;
+                window.dispatchEvent(new CustomEvent('download-finished')); // Tell sub-components to refresh stats
+            }
+        }
+    }
+}
+</script>
+</body>
+</html>
