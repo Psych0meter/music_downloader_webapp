@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  music-downloader:
+    build: .
+    container_name: music-downloader-web
+    ports:
+      - "5005:5000"
+    volumes:
+      # Change this to your actual Music path on TrueNAS
+      - /mnt/tank/Media/Music:/downloads
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
