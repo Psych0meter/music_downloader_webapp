@@ -36,8 +36,8 @@ function ocrState() {
         async getStats() {
             const r = await fetch('/api/info/ocremix');
             const d = await r.json();
-            this.stats.latest_online = `OCR${String(d.latest_online).padStart(5, '0')}`;
-            this.stats.last_downloaded = `OCR${String(d.last_downloaded).padStart(5, '0')}`;
+            this.stats.latest_online = `${String(d.latest_online).padStart(5, '0')}`;
+            this.stats.last_downloaded = `${String(d.last_downloaded).padStart(5, '0')}`;
             this.folder = d.default_path;
         }
     }
