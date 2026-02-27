@@ -1,26 +1,37 @@
-import os, re, time, requests
+import os, re, time, requests, logging
 from bs4 import BeautifulSoup
 from providers.base import BaseProvider, HEADERS
+
+logger = logging.getLogger("MediaVault.OCRemix")
 
 class OCRemixProvider(BaseProvider):
     id = "ocremix"
     name = "OCRemix"
 
     def get_info(self):
-        latest = 0
+        latest = None
         try:
             res = requests.get("https://ocremix.org/remixes/", headers=HEADERS, timeout=10)
-            matches = re.findall(r'/remix/OCR(\d{5})', res.text)
-            if matches: latest = max(int(m) for m in matches)
-        except: pass
-        
-        # Check files in current active download path
+            matches = re.findall(r'/remix/OCR(\d+)', res.text)
+            if matches:
+                latest = max(int(m) for m in matches)
+                logger.info(f"OCRemix: Scraped latest ID {latest}")
+        except Exception as e:
+            logger.warning(f"OCRemix: Failed to fetch latest online ID: {e}")
+
         path = self.get_path()
-        files = [f for f in os.listdir(path) if f.startswith("OCR")] if os.path.exists(path) else []
-        local_ids = [int(re.match(r'OCR(\d{5})', f).group(1)) for f in files if re.match(r'OCR(\d{5})', f)]
-        
+        local_max = None
+        if os.path.exists(path):
+            files = [f for f in os.listdir(path) if "OCR" in f]
+            ids = [int(re.search(r'OCR(\d+)', f).group(1)) for f in files if re.search(r'OCR(\d+)', f)]
+            if ids: local_max = max(ids)
+
         info = super().get_info()
-        info.update({"latest_online": latest, "last_downloaded": max(local_ids) if local_ids else 0})
+        # Return strings or "Unknown" for the UI
+        info.update({
+            "latest_online": f"OCR{latest:05d}" if latest else "Unknown",
+            "last_downloaded": f"OCR{local_max:05d}" if local_max else "Unknown"
+        })
         return info
 
     def download(self, data):
@@ -37,18 +48,29 @@ class OCRemixProvider(BaseProvider):
                 except: continue
             elif part.isdigit(): ids.append(int(part))
         
+        if not ids:
+            logger.warning("OCRemix: No valid IDs provided for download.")
+            return
+
         missing_only = data.get('missing_only', False)
         existing = set(os.listdir(dest_path)) if missing_only and os.path.exists(dest_path) else set()
         
         for idx, rid_int in enumerate(ids, 1):
             percent = int((idx / len(ids)) * 100)
             rid = f"OCR{rid_int:05d}"
+            
             if missing_only and any(f.startswith(rid) for f in existing):
-                yield {"line": f"[{rid}] Skipping existing.", "progress": percent}
+                yield {"line": f"[{rid}] Skipping (exists)", "progress": percent}
                 continue
 
             try:
+                logger.info(f"OCRemix: Processing {rid}...")
                 page = requests.get(f"https://ocremix.org/remix/{rid}", headers=HEADERS, timeout=10)
+                if page.status_code != 200:
+                    logger.error(f"OCRemix: ID {rid} returned HTTP {page.status_code}")
+                    yield {"line": f"[{rid}] Request failed (HTTP {page.status_code})", "progress": percent}
+                    continue
+
                 soup = BeautifulSoup(page.text, "html.parser")
                 link = next((a["href"] for a in soup.find_all("a", href=True) if "ocrmirror.org" in a["href"]), None)
                 
@@ -58,7 +80,12 @@ class OCRemixProvider(BaseProvider):
                     with requests.get(link, headers=HEADERS, stream=True) as r:
                         with open(os.path.join(dest_path, f"{rid} - {fname}"), "wb") as f:
                             for chunk in r.iter_content(8192): f.write(chunk)
-                else: yield {"line": f"[{rid}] No mirror found.", "progress": percent}
-            except: yield {"line": f"[{rid}] Request failed.", "progress": percent}
+                    logger.info(f"OCRemix: Successfully saved {rid}")
+                else:
+                    logger.warning(f"OCRemix: No mirror links found for {rid}")
+                    yield {"line": f"[{rid}] No mirror link found on page.", "progress": percent}
+            except Exception as e:
+                logger.error(f"OCRemix: Error during {rid} processing: {str(e)}")
+                yield {"line": f"[{rid}] Failed: {str(e)}", "progress": percent}
             time.sleep(0.5)
         yield {"line": "<b>--- Done ---</b>", "progress": 100}
