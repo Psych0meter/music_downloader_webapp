@@ -4,34 +4,25 @@
 # License: MIT | https://github.com/Psych0meter/music_downloader_webapp/blob/main/LICENSE
 # Source: https://github.com/Psych0meter/music_downloader_webapp
 
-# This script is fetched from GitHub and run inside the LXC container via
-# lxc-attach from ct/music-downloader.sh. It does NOT use $FUNCTIONS_FILE_PATH
-# because that path only exists on the Proxmox host, not inside the container.
-# We provide our own minimal helpers below so the script is fully self-contained.
-
 set -euo pipefail
 
-# ---------------------------------------------------------------------------
-# Minimal helpers (mirrors community-scripts style output without the host deps)
-# ---------------------------------------------------------------------------
+# Branch to clone — passed from ct/music-downloader.sh via env var, defaults to "main"
+BRANCH="${BRANCH:-main}"
+
 YW=$(echo "\033[33m"); GN=$(echo "\033[1;92m"); RD=$(echo "\033[01;31m"); CL=$(echo "\033[m")
-CM="  ✔️  "; CROSS="  ✖️  "; INFO="  💡  "
+CM="  ✔️  "; CROSS="  ✖️  "
 
 msg_info()  { echo -e "  ⏳  ${YW}${1}${CL}"; }
 msg_ok()    { echo -e "${CM}${GN}${1}${CL}"; }
 msg_error() { echo -e "${CROSS}${RD}${1}${CL}"; exit 1; }
 
-# ---------------------------------------------------------------------------
-# Install
-# ---------------------------------------------------------------------------
-
 msg_info "Updating OS"
 apt-get update -qq
-apt-get upgrade -y -qq
+DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
 msg_ok "OS Updated"
 
 msg_info "Installing Dependencies"
-apt-get install -y -qq \
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
   curl \
   git \
   python3 \
@@ -39,12 +30,14 @@ apt-get install -y -qq \
   python3-venv
 msg_ok "Installed Dependencies"
 
-msg_info "Cloning Music Downloader Repository"
-RELEASE=$(curl -fsSL "https://api.github.com/repos/Psych0meter/music_downloader_webapp/commits/debug" \
+msg_info "Cloning Music Downloader Repository (branch: ${BRANCH})"
+RELEASE=$(curl -fsSL "https://api.github.com/repos/Psych0meter/music_downloader_webapp/commits/${BRANCH}" \
   | grep '"sha"' | head -1 | awk '{print substr($2, 2, 8)}')
-git clone -q https://github.com/Psych0meter/music_downloader_webapp.git /opt/music-downloader
-echo "${RELEASE}" > /opt/music-downloader_version.txt
-msg_ok "Cloned Repository (ref: ${RELEASE})"
+git clone -q --branch "${BRANCH}" \
+  https://github.com/Psych0meter/music_downloader_webapp.git /opt/music-downloader
+# Record both the branch and commit for update/debug purposes
+echo "${BRANCH}@${RELEASE}" > /opt/music-downloader_version.txt
+msg_ok "Cloned Repository (branch: ${BRANCH}, ref: ${RELEASE})"
 
 msg_info "Setting Up Python Virtual Environment"
 python3 -m venv /opt/music-downloader/venv
@@ -76,19 +69,18 @@ Environment=PYTHONUNBUFFERED=1
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl daemon-reload
-systemctl enable -q --now music-downloader
-msg_ok "Service Created and Started"
 
-sleep 2
-if ! systemctl is-active --quiet music-downloader; then
-  msg_error "Service failed to start. Run: journalctl -u music-downloader -n 30"
-fi
+# Enable only — do not start. systemctl start fails inside lxc-attach during
+# container creation (systemd not fully initialised). Starts on first boot.
+systemctl daemon-reload
+systemctl enable -q music-downloader
+msg_ok "Service Enabled (will start on first boot)"
 
 msg_info "Cleaning Up"
-apt-get -y autoremove -qq
+DEBIAN_FRONTEND=noninteractive apt-get -y autoremove -qq
 apt-get -y autoclean -qq
 msg_ok "Cleaned Up"
 
 echo -e "\n${CM}${GN}Music Downloader installed successfully!${CL}"
-echo -e "${INFO}${YW}Access at: http://$(hostname -I | awk '{print $1}'):5000${CL}\n"
+echo -e "  💡  ${YW}Branch: ${BRANCH} (${RELEASE})${CL}"
+echo -e "  💡  ${YW}Access at: http://$(hostname -I | awk '{print $1}'):5000 (after container restart)${CL}\n"

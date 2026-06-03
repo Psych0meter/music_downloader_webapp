@@ -6,11 +6,13 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Source: https://github.com/Psych0meter/music_downloader_webapp
 
 # ---------------------------------------------------------------------------
-# The install script lives in THIS repo, not in community-scripts.
-# build.func would try to fetch it from git.community-scripts.org and 404.
-# We override by telling build.func to use our own URL via INSTALL_URL,
-# and by providing a custom build_container wrapper below.
+# Branch to deploy. Override at runtime with:
+#   BRANCH=debug bash -c "$(curl -fsSL ...)"
+# Defaults to "main" for normal use.
 # ---------------------------------------------------------------------------
+BRANCH="${BRANCH:-main}"
+REPO="https://github.com/Psych0meter/music_downloader_webapp"
+INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/Psych0meter/music_downloader_webapp/${BRANCH}/install/music-downloader-install.sh"
 
 APP="Music Downloader"
 var_tags="${var_tags:-media;music}"
@@ -20,9 +22,6 @@ var_disk="${var_disk:-4}"
 var_os="${var_os:-debian}"
 var_version="${var_version:-13}"
 var_unprivileged="${var_unprivileged:-1}"
-
-# URL of our own install script (change branch here if needed)
-INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/Psych0meter/music_downloader_webapp/debug/install/music-downloader-install.sh"
 
 header_info "$APP"
 variables
@@ -61,24 +60,18 @@ start
 build_container
 
 # ---------------------------------------------------------------------------
-# Run our own install script inside the container.
-# build.func's build_container already:
-#   - created and started the container
-#   - deployed SSH keys (install_ssh_keys_into_ct)
-#   - ran customize() for auto-login / motd
-# We just need to fetch+run our install script via lxc-attach.
-# FUNCTIONS_FILE_PATH is exported by build.func and contains the helper funcs
-# the install script needs (msg_info, msg_ok, etc.).
+# Run our own install script inside the container, passing BRANCH as an env
+# var so the install script clones the correct branch of the app repo.
 # ---------------------------------------------------------------------------
-msg_info "Running ${APP} Install Script"
+msg_info "Running ${APP} Install Script (branch: ${BRANCH})"
 lxc-attach -n "$CTID" -- bash -c \
-  "$(curl -fsSL "$INSTALL_SCRIPT_URL")" \
-  -- "$APP" "$FUNCTIONS_FILE_PATH" "$CTID"
+  "BRANCH='${BRANCH}' bash <(curl -fsSL '${INSTALL_SCRIPT_URL}')"
 msg_ok "Install Script Completed"
 
 description
 
 msg_ok "Completed Successfully!\n"
 echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
+echo -e "${INFO}${YW} Branch deployed: ${BRANCH}${CL}"
 echo -e "${INFO}${YW} Access it using the following URL:${CL}"
 echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:5000${CL}"
