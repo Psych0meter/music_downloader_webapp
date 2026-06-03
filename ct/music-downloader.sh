@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
-# Copyright (c) 2024 Psych0meter
+# Copyright (c) 2026 Psych0meter
 # Author: Psych0meter
 # License: MIT | https://github.com/Psych0meter/music_downloader_webapp/blob/main/LICENSE
 # Source: https://github.com/Psych0meter/music_downloader_webapp
@@ -36,14 +36,15 @@ function update_script() {
   msg_info "Updating ${APP}"
   cd /opt/music-downloader
   $STD git pull
-  $STD pip install --upgrade -r requirements.txt --break-system-packages
+  # FIX: venv pip never needs --break-system-packages (that flag is only for system pip)
+  $STD /opt/music-downloader/venv/bin/pip install --upgrade -r requirements.txt
   msg_ok "Updated ${APP}"
 
   msg_info "Starting Service"
   systemctl start music-downloader
   msg_ok "Started Service"
 
-  msg_ok "Updated successfully"
+  msg_ok "Update Successful"
   exit
 }
 

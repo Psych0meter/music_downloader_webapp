@@ -29,7 +29,8 @@ msg_ok "Cloned ${APP} Repository (ref: ${RELEASE})"
 
 msg_info "Setting Up Python Environment"
 python3 -m venv /opt/music-downloader/venv
-/opt/music-downloader/venv/bin/pip install --upgrade pip --quiet
+# FIX: use venv pip directly — no --break-system-packages needed inside a venv
+$STD /opt/music-downloader/venv/bin/pip install --upgrade pip
 $STD /opt/music-downloader/venv/bin/pip install -r /opt/music-downloader/requirements.txt
 msg_ok "Python Environment Ready"
 
@@ -62,22 +63,22 @@ systemctl daemon-reload
 systemctl enable -q --now music-downloader
 msg_ok "Systemd Service Created and Started"
 
-# Verify the service is actually up
 sleep 2
 if ! systemctl is-active --quiet music-downloader; then
   msg_error "Service failed to start — check: journalctl -u music-downloader -n 30"
   exit 1
 fi
 
-# Save version for update detection
 echo "${RELEASE}" >/opt/music-downloader_version.txt
 
-motd_ssh
-customize
+# FIX: removed motd_ssh  → function no longer exists in current community-scripts build.func
+# FIX: removed customize → runs whiptail dialogs that fail inside pct exec (no TTY);
+#      SSH key deployment is already handled by install_ssh_keys_into_ct() in build.func,
+#      which runs on the HOST before this script is invoked — no action needed here.
+# FIX: removed cleanup_lxc → function does not exist in build.func; calling it caused
+#      "command not found" which made the entire post-install phase exit with an error.
 
 msg_info "Cleaning Up"
 $STD apt-get -y autoremove
 $STD apt-get -y autoclean
 msg_ok "Cleaned Up"
-
-cleanup_lxc
