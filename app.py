@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()  # loads .env into os.environ before anything else reads it
 import json
 import logging
 import sys
@@ -8,72 +11,163 @@ from collections import deque
 from flask import Flask, render_template, request, Response, stream_with_context, jsonify
 from providers.base import BaseProvider
 
-# Custom handler to store logs for the web view
+# ---------------------------------------------------------------------------
+# Logging — dual handler: stdout + in-memory ring buffer for the web log view
+# ---------------------------------------------------------------------------
+
 class WebLogHandler(logging.Handler):
     def __init__(self, capacity=200):
         super().__init__()
         self.buffer = deque(maxlen=capacity)
+
     def emit(self, record):
         self.buffer.append(self.format(record))
 
-log_handler = WebLogHandler()
-log_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
 
-logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler(sys.stdout), log_handler])
+log_handler = WebLogHandler()
+log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+logging.basicConfig(
+    level=logging.INFO,
+    handlers=[logging.StreamHandler(sys.stdout), log_handler],
+)
 logger = logging.getLogger("MediaVault")
 
-app = Flask(__name__)
-PROVIDERS = {}
+# ---------------------------------------------------------------------------
+# Flask app
+# ---------------------------------------------------------------------------
 
-def load_providers():
-    providers_dir = os.path.join(os.path.dirname(__file__), 'providers')
-    if not os.path.exists(providers_dir): os.makedirs(providers_dir)
-    for filename in os.listdir(providers_dir):
-        if filename.endswith('.py') and filename not in ('__init__.py', 'base.py'):
-            module_name = filename[:-3]
-            spec = importlib.util.spec_from_file_location(module_name, os.path.join(providers_dir, filename))
+app = Flask(__name__)
+
+PROVIDERS: dict[str, BaseProvider] = {}
+
+
+def load_providers() -> None:
+    """
+    Dynamically discover and load every BaseProvider subclass found in the
+    providers/ directory.  Individual provider import errors are caught and
+    logged so a single broken provider does not take the whole app down.
+    """
+    # Use an absolute path so the app works regardless of the working directory
+    providers_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "providers")
+    os.makedirs(providers_dir, exist_ok=True)
+
+    for filename in sorted(os.listdir(providers_dir)):
+        if not filename.endswith(".py") or filename in ("__init__.py", "base.py"):
+            continue
+
+        module_name = filename[:-3]
+        filepath = os.path.join(providers_dir, filename)
+
+        try:
+            spec = importlib.util.spec_from_file_location(module_name, filepath)
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
-            for name, obj in inspect.getmembers(module):
-                if inspect.isclass(obj) and issubclass(obj, BaseProvider) and obj is not BaseProvider:
-                    PROVIDERS[obj.id] = obj()
-                    logger.info(f"Plugin Loaded: {obj.id}")
+
+            for name, obj in inspect.getmembers(module, inspect.isclass):
+                if issubclass(obj, BaseProvider) and obj is not BaseProvider:
+                    instance = obj()
+                    PROVIDERS[instance.id] = instance
+                    logger.info("Plugin loaded: %s", instance.id)
+
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Failed to load provider '%s': %s", module_name, exc)
+
 
 load_providers()
 
-@app.route('/')
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+
+@app.route("/")
 def index():
-    return render_template('index.html', providers=list(PROVIDERS.values()))
+    return render_template("index.html", providers=list(PROVIDERS.values()))
 
-@app.route('/logs')
+
+@app.route("/logs")
 def logs_page():
-    return render_template('logs.html')
+    return render_template("logs.html")
 
-@app.route('/api/system/logs')
+
+# -- System ------------------------------------------------------------------
+
+
+@app.route("/api/system/logs")
 def get_system_logs():
     return jsonify({"logs": list(log_handler.buffer)})
 
-@app.route('/api/info/<provider_id>')
-def provider_info(provider_id):
-    if provider_id not in PROVIDERS: return jsonify({"error": "Not found"}), 404
-    return jsonify(PROVIDERS[provider_id].get_info())
 
-@app.route('/api/search/<provider_id>', methods=['POST'])
-def search(provider_id):
-    if provider_id not in PROVIDERS: return jsonify({"error": "Not found"}), 404
-    return jsonify({"results": PROVIDERS[provider_id].search(request.json.get('query', ''))})
+@app.route("/api/health")
+def health():
+    """Simple liveness probe used by Docker / Proxmox health checks."""
+    return jsonify({"status": "ok", "providers": list(PROVIDERS.keys())})
 
-@app.route('/api/download/<provider_id>', methods=['POST'])
-def download(provider_id):
-    if provider_id not in PROVIDERS: return jsonify({"error": "Not found"}), 404
+
+# -- Provider info / search --------------------------------------------------
+
+
+@app.route("/api/info/<provider_id>")
+def provider_info(provider_id: str):
+    provider = PROVIDERS.get(provider_id)
+    if provider is None:
+        return jsonify({"error": "Provider not found"}), 404
+    return jsonify(provider.get_info())
+
+
+@app.route("/api/search/<provider_id>", methods=["POST"])
+def search(provider_id: str):
+    provider = PROVIDERS.get(provider_id)
+    if provider is None:
+        return jsonify({"error": "Provider not found"}), 404
+
+    query = (request.json or {}).get("query", "").strip()
+    if not query:
+        return jsonify({"error": "Query cannot be empty"}), 400
+
+    try:
+        results = provider.search(query)
+        return jsonify({"results": results})
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Search error in provider '%s': %s", provider_id, exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+# -- Download (SSE stream) ---------------------------------------------------
+
+
+@app.route("/api/download/<provider_id>", methods=["POST"])
+def download(provider_id: str):
+    provider = PROVIDERS.get(provider_id)
+    if provider is None:
+        return jsonify({"error": "Provider not found"}), 404
+
+    payload = request.json or {}
+
     def generate():
         try:
-            for log_data in PROVIDERS[provider_id].download(request.json):
+            for log_data in provider.download(payload):
                 yield f"data: {json.dumps(log_data)}\n\n"
-        except Exception as e:
-            logger.error(f"Download Task Failed: {str(e)}")
-            yield f"data: {json.dumps({'line': f'Critical Error: {str(e)}', 'progress': 100})}\n\n"
-    return Response(stream_with_context(generate()), mimetype='text/event-stream')
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Download error in provider '%s': %s", provider_id, exc)
+            yield f"data: {json.dumps({'line': f'Critical Error: {exc}', 'progress': 100})}\n\n"
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            # Prevent buffering by proxies / nginx
+            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-cache",
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get("FLASK_DEBUG", "0") == "1"
+    app.run(host="0.0.0.0", port=port, debug=debug)
