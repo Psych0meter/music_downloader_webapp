@@ -3,22 +3,28 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Set default Environment Variables
-ENV DOWNLOAD_DIR=/downloads
-ENV PYTHONUNBUFFERED=1
+# Environment variables
+ENV DOWNLOAD_DIR=/downloads \
+    PYTHONUNBUFFERED=1 \
+    PORT=5000
 
-# Install dependencies
+# Install dependencies first (layer-cached until requirements change)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application files
+# Copy application source
 COPY app.py .
+COPY providers/ ./providers/
 COPY templates/ ./templates/
 
-# Create the downloads directory
+# Persistent download volume mount point
 RUN mkdir -p /downloads
 
-# Standard Flask port
+# Expose Flask port
 EXPOSE 5000
+
+# Lightweight health check — uses the /api/health endpoint added in app.py
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')" || exit 1
 
 CMD ["python", "app.py"]
