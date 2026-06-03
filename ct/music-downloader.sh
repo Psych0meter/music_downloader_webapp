@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
-# Copyright (c) 2024 Psych0meter
+# Copyright (c) 2024-2026 Psych0meter
 # Author: Psych0meter
 # License: MIT | https://github.com/Psych0meter/music_downloader_webapp/blob/main/LICENSE
 # Source: https://github.com/Psych0meter/music_downloader_webapp
 
 # ---------------------------------------------------------------------------
-# Branch to deploy. Override at runtime with:
-#   BRANCH=debug bash -c "$(curl -fsSL ...)"
-# Defaults to "main" for normal use.
+# Branch to deploy. Defaults to "main". 
+# On your debug branch version of this file, change "main" to "debug".
 # ---------------------------------------------------------------------------
 BRANCH="${BRANCH:-main}"
 REPO="https://github.com/Psych0meter/music_downloader_webapp"
@@ -33,7 +32,7 @@ function update_script() {
   check_container_storage
   check_container_resources
 
-  if [[ ! -f /opt/music-downloader/app.py ]]; then
+  if [[ ! -d /opt/music-downloader ]]; then
     msg_error "No ${APP} Installation Found!"
     exit
   fi
@@ -58,22 +57,18 @@ function update_script() {
 
 start
 build_container
+description
 
 # ---------------------------------------------------------------------------
-# Run our own install script inside the container, passing BRANCH as an env
-# var so the install script clones the correct branch of the app repo.
+# Passing FUNCTIONS_FILE_PATH allows our custom installer to inherit 
+# all official Proxmox helper scripts UI and customization features.
 # ---------------------------------------------------------------------------
 msg_info "Running ${APP} Install Script (branch: ${BRANCH})"
-# Pipe curl output directly into lxc-attach bash stdin.
-# bash <() process substitution does NOT work inside lxc-attach
-# because /dev/fd is unavailable in that execution context.
-curl -fsSL "$INSTALL_SCRIPT_URL" | BRANCH="${BRANCH}" lxc-attach -n "$CTID" -- bash
+curl -fsSL "$INSTALL_SCRIPT_URL" | BRANCH="${BRANCH}" FUNCTIONS_FILE_PATH="${FUNCTIONS_FILE_PATH}" lxc-attach -n "$CTID" -- bash
 msg_ok "Install Script Completed"
-
-description
 
 msg_ok "Completed Successfully!\n"
 echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
-echo -e "${INFO}${YW} Branch deployed: ${BRANCH}${CL}"
-echo -e "${INFO}${YW} Access it using the following URL:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:5000${CL}"
+echo -e "${INFO}${YW}Branch deployed: ${BRANCH}${CL}"
+echo -e "${INFO}${YW}Access it using the following URL:${CL}"
+echo -e "${GATEWAY}${BGN}http://${IP}:5000${CL}"
