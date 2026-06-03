@@ -4,16 +4,34 @@
 # License: MIT | https://github.com/Psych0meter/music_downloader_webapp/blob/main/LICENSE
 # Source: https://github.com/Psych0meter/music_downloader_webapp
 
-source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
-color
-verb_ip6
-catch_errors
-setting_up_container
-network_check
-update_os
+# This script is fetched from GitHub and run inside the LXC container via
+# lxc-attach from ct/music-downloader.sh. It does NOT use $FUNCTIONS_FILE_PATH
+# because that path only exists on the Proxmox host, not inside the container.
+# We provide our own minimal helpers below so the script is fully self-contained.
+
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Minimal helpers (mirrors community-scripts style output without the host deps)
+# ---------------------------------------------------------------------------
+YW=$(echo "\033[33m"); GN=$(echo "\033[1;92m"); RD=$(echo "\033[01;31m"); CL=$(echo "\033[m")
+CM="  ✔️  "; CROSS="  ✖️  "; INFO="  💡  "
+
+msg_info()  { echo -e "  ⏳  ${YW}${1}${CL}"; }
+msg_ok()    { echo -e "${CM}${GN}${1}${CL}"; }
+msg_error() { echo -e "${CROSS}${RD}${1}${CL}"; exit 1; }
+
+# ---------------------------------------------------------------------------
+# Install
+# ---------------------------------------------------------------------------
+
+msg_info "Updating OS"
+apt-get update -qq
+apt-get upgrade -y -qq
+msg_ok "OS Updated"
 
 msg_info "Installing Dependencies"
-$STD apt-get install -y \
+apt-get install -y -qq \
   curl \
   git \
   python3 \
@@ -21,17 +39,17 @@ $STD apt-get install -y \
   python3-venv
 msg_ok "Installed Dependencies"
 
-msg_info "Cloning ${APP} Repository"
-RELEASE=$(curl -fsSL https://api.github.com/repos/Psych0meter/music_downloader_webapp/commits/main \
+msg_info "Cloning Music Downloader Repository"
+RELEASE=$(curl -fsSL "https://api.github.com/repos/Psych0meter/music_downloader_webapp/commits/debug" \
   | grep '"sha"' | head -1 | awk '{print substr($2, 2, 8)}')
-$STD git clone https://github.com/Psych0meter/music_downloader_webapp.git /opt/music-downloader
-msg_ok "Cloned ${APP} Repository (ref: ${RELEASE})"
+git clone -q https://github.com/Psych0meter/music_downloader_webapp.git /opt/music-downloader
+echo "${RELEASE}" > /opt/music-downloader_version.txt
+msg_ok "Cloned Repository (ref: ${RELEASE})"
 
-msg_info "Setting Up Python Environment"
+msg_info "Setting Up Python Virtual Environment"
 python3 -m venv /opt/music-downloader/venv
-# FIX: use venv pip directly — no --break-system-packages needed inside a venv
-$STD /opt/music-downloader/venv/bin/pip install --upgrade pip
-$STD /opt/music-downloader/venv/bin/pip install -r /opt/music-downloader/requirements.txt
+/opt/music-downloader/venv/bin/pip install --upgrade pip --quiet
+/opt/music-downloader/venv/bin/pip install -r /opt/music-downloader/requirements.txt --quiet
 msg_ok "Python Environment Ready"
 
 msg_info "Creating Downloads Directory"
@@ -58,27 +76,19 @@ Environment=PYTHONUNBUFFERED=1
 [Install]
 WantedBy=multi-user.target
 EOF
-
 systemctl daemon-reload
 systemctl enable -q --now music-downloader
-msg_ok "Systemd Service Created and Started"
+msg_ok "Service Created and Started"
 
 sleep 2
 if ! systemctl is-active --quiet music-downloader; then
-  msg_error "Service failed to start — check: journalctl -u music-downloader -n 30"
-  exit 1
+  msg_error "Service failed to start. Run: journalctl -u music-downloader -n 30"
 fi
 
-echo "${RELEASE}" >/opt/music-downloader_version.txt
-
-# FIX: removed motd_ssh  → function no longer exists in current community-scripts build.func
-# FIX: removed customize → runs whiptail dialogs that fail inside pct exec (no TTY);
-#      SSH key deployment is already handled by install_ssh_keys_into_ct() in build.func,
-#      which runs on the HOST before this script is invoked — no action needed here.
-# FIX: removed cleanup_lxc → function does not exist in build.func; calling it caused
-#      "command not found" which made the entire post-install phase exit with an error.
-
 msg_info "Cleaning Up"
-$STD apt-get -y autoremove
-$STD apt-get -y autoclean
+apt-get -y autoremove -qq
+apt-get -y autoclean -qq
 msg_ok "Cleaned Up"
+
+echo -e "\n${CM}${GN}Music Downloader installed successfully!${CL}"
+echo -e "${INFO}${YW}Access at: http://$(hostname -I | awk '{print $1}'):5000${CL}\n"
