@@ -2,7 +2,7 @@ import os
 import re
 from urllib.parse import unquote
 from bs4 import BeautifulSoup
-from curl_cffi import requests  # Swapped from cloudscraper
+from curl_cffi import requests
 from providers.base import BaseProvider
 
 # curl_cffi handles browser TLS/JA4 signatures and HTTP/2 profiles perfectly to bypass Cloudflare.
@@ -31,13 +31,26 @@ class KHInsiderProvider(BaseProvider):
         res.raise_for_status()
         soup = BeautifulSoup(res.text, "html.parser")
         results = []
+        
         for row in soup.select(".albumList tr"):
-            cols = row.find_all("td")
-            if len(cols) > 1 and cols[1].find("a"):
-                link = cols[1].find("a")
+            # Find all links in the row to avoid hardcoded column indexes
+            links = row.find_all("a", href=True)
+            album_link = None
+            
+            # Find the link that belongs to an album and actually has text content
+            for a in links:
+                if "/game-soundtracks/album/" in a["href"] and a.text.strip():
+                    album_link = a
+                    break
+            
+            if album_link:
+                url = album_link["href"]
+                if not url.startswith("http"):
+                    url = f"https://downloads.khinsider.com{url}"
+                    
                 results.append({
-                    "name": link.text.strip(),
-                    "url": f"https://downloads.khinsider.com{link['href']}",
+                    "name": album_link.text.strip(),
+                    "url": url,
                 })
         return results
 
@@ -91,11 +104,12 @@ class KHInsiderProvider(BaseProvider):
 
                 yield {"line": f"Track {idx}/{total}: {file_name}", "progress": progress}
 
-                with _scraper.get(target_url, stream=True, timeout=30) as r:
-                    r.raise_for_status()
-                    with open(os.path.join(album_path, file_name), "wb") as f:
-                        for chunk in r.iter_content(65536):
-                            f.write(chunk)
+                # FIX: Removed the context manager 'with' loop which curl_cffi doesn't support
+                r = _scraper.get(target_url, stream=True, timeout=30)
+                r.raise_for_status()
+                with open(os.path.join(album_path, file_name), "wb") as f:
+                    for chunk in r.iter_content(65536):
+                        f.write(chunk)
 
             yield {"line": "<span class='text-emerald-400'>=== FINISHED ===</span>", "progress": 100}
 
