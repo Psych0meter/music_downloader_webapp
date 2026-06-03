@@ -1,13 +1,26 @@
-version: '3.8'
 services:
   music-downloader:
     build: .
+    image: ghcr.io/psych0meter/music_downloader_webapp:latest
     container_name: music-downloader-web
     ports:
-      - "5005:5000"
+      - "5000:5000"
     volumes:
-      # Change this to your actual Music path on TrueNAS
-      - /mnt/tank/Media/Music:/downloads
+      # Change this to the path where you want music saved on the host.
+      # Examples:
+      #   - /mnt/tank/Media/Music:/downloads          (TrueNAS)
+      #   - /mnt/user/Media/Music:/downloads           (Unraid)
+      #   - /opt/music-downloader/downloads:/downloads (Proxmox LXC / generic Linux)
+      - ./downloads:/downloads
     environment:
       - PYTHONUNBUFFERED=1
+      # Uncomment and set to override the default port (5000):
+      # - PORT=5000
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
