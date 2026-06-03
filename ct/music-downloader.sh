@@ -64,8 +64,10 @@ build_container
 # var so the install script clones the correct branch of the app repo.
 # ---------------------------------------------------------------------------
 msg_info "Running ${APP} Install Script (branch: ${BRANCH})"
-lxc-attach -n "$CTID" -- bash -c \
-  "BRANCH='${BRANCH}' bash <(curl -fsSL '${INSTALL_SCRIPT_URL}')"
+# Pipe curl output directly into lxc-attach bash stdin.
+# bash <() process substitution does NOT work inside lxc-attach
+# because /dev/fd is unavailable in that execution context.
+curl -fsSL "$INSTALL_SCRIPT_URL" | BRANCH="${BRANCH}" lxc-attach -n "$CTID" -- bash
 msg_ok "Install Script Completed"
 
 description
