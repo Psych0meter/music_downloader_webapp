@@ -16,7 +16,7 @@ A self-hosted web application for downloading video game soundtracks and remixes
 - ⬇️ Live download progress streamed to the browser (Server-Sent Events)
 - 🔌 Plugin architecture — add new sources without touching core code
 - 📋 In-app log viewer
-- 🐳 Docker-ready with health check
+- 🐳 Docker-ready with health check and multi-platform images (amd64 + arm64)
 - 🖥️ Proxmox LXC install script (bare Python, no Docker needed)
 
 ---
@@ -44,6 +44,8 @@ Then open **http://localhost:5000** in your browser.
 > ```
 
 ### Pre-built image (GHCR)
+
+Images are automatically built and published to the GitHub Container Registry on every tagged release, for both `linux/amd64` and `linux/arm64`.
 
 ```bash
 docker run -d \
@@ -191,6 +193,10 @@ music_downloader_webapp/
 ├── docker-compose.yml        # Compose stack
 ├── .env.example              # Environment variable template
 │
+├── .github/
+│   └── workflows/
+│       └── docker-build.yml  # CI: builds & pushes multi-platform image to GHCR
+│
 ├── providers/
 │   ├── base.py               # BaseProvider abstract class
 │   ├── khinsider.py          # KHInsider provider (curl_cffi — Cloudflare bypass)
@@ -210,17 +216,30 @@ music_downloader_webapp/
 
 ---
 
-## 🐳 Building the Docker Image
+## 🐳 Docker Image & CI/CD
+
+### Automated builds
+
+The GitHub Actions workflow (`.github/workflows/docker-build.yml`) automatically builds and pushes a multi-platform image to GHCR whenever a tag is pushed:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+This produces:
+- `ghcr.io/psych0meter/music_downloader_webapp:v1.0.0`
+- `ghcr.io/psych0meter/music_downloader_webapp:latest`
+
+Both `linux/amd64` and `linux/arm64` platforms are built in a single manifest.
+
+You can also trigger a build manually from the **Actions** tab in GitHub (workflow_dispatch), with an optional branch input.
+
+### Building locally
 
 ```bash
 docker build -t music-downloader .
 docker run -d -p 5000:5000 -v /your/music:/downloads music-downloader
-```
-
-To publish to GHCR (CI handles this automatically on push to `main`):
-```bash
-docker tag music-downloader ghcr.io/psych0meter/music_downloader_webapp:latest
-docker push ghcr.io/psych0meter/music_downloader_webapp:latest
 ```
 
 ---
