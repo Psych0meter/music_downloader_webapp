@@ -24,9 +24,6 @@ jobs:
 
       - name: Set up QEMU (for multi-platform builds)
         uses: docker/setup-qemu-action@v4
-        with:
-          # Disable QEMU binary caching to avoid cache conflicts on concurrent runs
-          cache: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
