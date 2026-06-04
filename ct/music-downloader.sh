@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
-# Copyright (c) 2024-2026 Psych0meter
+# Copyright (c) 2026 Psych0meter
 # Author: Psych0meter
 # License: MIT | https://github.com/Psych0meter/music_downloader_webapp/blob/main/LICENSE
 # Source: https://github.com/Psych0meter/music_downloader_webapp
 
 # ---------------------------------------------------------------------------
-# Branch to deploy. Defaults to "main". 
-# On your debug branch version of this file, change "main" to "debug".
+# Branch to deploy. Defaults to "main".
+# To deploy a specific branch, export BRANCH before running:
+#   export BRANCH=debug
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/Psych0meter/music_downloader_webapp/main/ct/music-downloader.sh)"
 # ---------------------------------------------------------------------------
 BRANCH="${BRANCH:-main}"
 REPO="https://github.com/Psych0meter/music_downloader_webapp"
@@ -57,15 +59,20 @@ function update_script() {
 
 start
 build_container
-description
 
 # ---------------------------------------------------------------------------
-# Passing FUNCTIONS_FILE_PATH allows our custom installer to inherit 
-# all official Proxmox helper scripts UI and customization features.
+# Run our install script inside the container.
+# build.func's build_container already handles SSH keys and container setup.
+# FUNCTIONS_FILE_PATH is passed so the install script can use community-scripts
+# helper functions (motd_ssh, customize, cleanup_lxc) for autologin and MOTD.
+# Pipe is used instead of bash <() because process substitution requires
+# /dev/fd which is unavailable inside lxc-attach.
 # ---------------------------------------------------------------------------
 msg_info "Running ${APP} Install Script (branch: ${BRANCH})"
 curl -fsSL "$INSTALL_SCRIPT_URL" | BRANCH="${BRANCH}" FUNCTIONS_FILE_PATH="${FUNCTIONS_FILE_PATH}" lxc-attach -n "$CTID" -- bash
 msg_ok "Install Script Completed"
+
+description
 
 msg_ok "Completed Successfully!\n"
 echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"

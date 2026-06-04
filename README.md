@@ -36,14 +36,14 @@ docker compose up -d
 
 Then open **http://localhost:5000** in your browser.
 
-> **Tip — change the download path:**  
+> **Tip — change the download path:**
 > Edit the `volumes` section in `docker-compose.yml` to point to your music library:
 > ```yaml
 > volumes:
 >   - /your/music/library:/downloads
 > ```
 
-### Pre-built image (Docker Hub / GHCR)
+### Pre-built image (GHCR)
 
 ```bash
 docker run -d \
@@ -73,7 +73,7 @@ Open **http://localhost:5000**.
 
 ## 🖥️ Proxmox LXC Install (one-liner)
 
-Run the following **on your Proxmox host shell** to create a Debian 12 LXC container and install the app automatically:
+Run the following **on your Proxmox host shell** to create a Debian 13 LXC container and install the app automatically:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/Psych0meter/music_downloader_webapp/main/ct/music-downloader.sh)"
@@ -90,13 +90,20 @@ The interactive wizard will guide you through container settings (or use the def
 | Port | 5000 |
 | Downloads | `/opt/music-downloader/downloads` |
 
+To deploy a specific branch (e.g. for testing):
+
+```bash
+export BRANCH=debug
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Psych0meter/music_downloader_webapp/main/ct/music-downloader.sh)"
+```
+
 See [`PROXMOX.md`](PROXMOX.md) for full documentation including bind mounts and update instructions.
 
 ---
 
 ## ⚙️ Configuration
 
-All configuration is done through environment variables:
+All configuration is done through environment variables (or a `.env` file in the project root):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -104,12 +111,14 @@ All configuration is done through environment variables:
 | `PORT` | `5000` | Port the Flask server listens on |
 | `FLASK_DEBUG` | `0` | Set to `1` to enable debug mode (development only) |
 
+Copy `.env.example` to `.env` and adjust values as needed — `app.py` loads it automatically on startup.
+
 ---
 
 ## 🔌 Adding a New Provider
 
 1. Create `providers/my_source.py`
-2. Subclass `BaseProvider` and implement `search()` and `download()`
+2. Subclass `BaseProvider` and implement `search()` and/or `download()`
 3. Restart the app — it will be auto-discovered
 
 ```python
@@ -127,8 +136,8 @@ class MySourceProvider(BaseProvider):
 
     def search(self, query: str) -> list[dict[str, Any]]:
         # Return a list of dicts with at minimum "name" and "url"
-        results = requests.get("https://mysource.example/search", params={"q": query})
-        return [{"name": r["title"], "url": r["href"]} for r in results.json()]
+        res = requests.get("https://mysource.example/search", params={"q": query})
+        return [{"name": r["title"], "url": r["href"]} for r in res.json()]
 
     def download(self, payload: dict[str, Any]) -> Generator[dict[str, Any], None, None]:
         url = payload["url"]
@@ -145,6 +154,8 @@ class MySourceProvider(BaseProvider):
         yield {"line": "Done!", "progress": 100}
 ```
 
+Providers that work by ID/range (like OCRemix) can skip `search()` entirely — the base class default returns `[]` and signals `supports_search: false` to the frontend, which then renders a custom form instead.
+
 See [`providers/base.py`](providers/base.py) for the full interface documentation.
 
 ---
@@ -155,7 +166,7 @@ See [`providers/base.py`](providers/base.py) for the full interface documentatio
 |--------|----------|-------------|
 | `GET` | `/` | Web UI |
 | `GET` | `/logs` | Log viewer UI |
-| `GET` | `/api/health` | Liveness probe (returns provider list) |
+| `GET` | `/api/health` | Liveness probe — returns `{"status":"ok","providers":[...]}` |
 | `GET` | `/api/info/<provider_id>` | Provider metadata |
 | `POST` | `/api/search/<provider_id>` | Search — body: `{"query": "..."}` |
 | `POST` | `/api/download/<provider_id>` | Download — body: provider-specific payload, response: SSE stream |
@@ -178,11 +189,12 @@ music_downloader_webapp/
 ├── requirements.txt          # Python dependencies
 ├── Dockerfile                # Container image
 ├── docker-compose.yml        # Compose stack
+├── .env.example              # Environment variable template
 │
 ├── providers/
 │   ├── base.py               # BaseProvider abstract class
-│   ├── khinsider.py          # KHInsider provider
-│   └── ocremix.py            # OCRemix provider
+│   ├── khinsider.py          # KHInsider provider (curl_cffi — Cloudflare bypass)
+│   └── ocremix.py            # OCRemix provider (ID/range-based)
 │
 ├── templates/
 │   ├── index.html            # Main UI

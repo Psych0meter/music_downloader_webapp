@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2024-2026 Psych0meter
+# Copyright (c) 2026 Psych0meter
 # Author: Psych0meter
 # License: MIT | https://github.com/Psych0meter/music_downloader_webapp/blob/main/LICENSE
 # Source: https://github.com/Psych0meter/music_downloader_webapp
@@ -62,7 +62,10 @@ systemctl daemon-reload
 systemctl enable -q --now music-downloader
 msg_ok "Created and Enabled Service"
 
-# Crucial lifecycle hooks that fix the Proxmox Web SSH/Console auto-login
+# Lifecycle hooks from community-scripts build.func:
+# - motd_ssh  : sets up SSH MOTD and auto-login (fixes Proxmox console prompt)
+# - customize : configures getty autologin (empty root password = no login prompt)
+# - cleanup_lxc: cleans up temp files and finalises container setup
 motd_ssh
 customize
 cleanup_lxc
