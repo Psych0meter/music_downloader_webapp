@@ -5,14 +5,38 @@ from bs4 import BeautifulSoup
 from curl_cffi import requests
 from providers.base import BaseProvider
 
-# curl_cffi handles browser TLS/JA4 signatures and HTTP/2 profiles perfectly to bypass Cloudflare.
-_scraper = requests.Session(impersonate="chrome")
+# Browser fingerprint targets in priority order.
+# If the first is blocked by Cloudflare, the session rotates to the next.
+_TARGETS = ["chrome146", "chrome145", "chrome136", "firefox147", "chrome124"]
+
+
+def _make_session(target: str) -> requests.Session:
+    return requests.Session(impersonate=target)
+
+
+_scraper = _make_session(_TARGETS[0])
+
+
+def _get(url: str, **kwargs) -> requests.Response:
+    """
+    GET with automatic fingerprint rotation on 403.
+    Tries each target in _TARGETS before giving up.
+    """
+    global _scraper
+    for target in _TARGETS:
+        _scraper = _make_session(target)
+        r = _scraper.get(url, **kwargs)
+        if r.status_code != 403:
+            return r
+    # Return last response (caller will raise_for_status)
+    return r
 
 
 class KHInsiderProvider(BaseProvider):
     id = "khinsider"
     name = "KHInsider"
     description = "Video game soundtracks (MP3 / FLAC) from downloads.khinsider.com"
+    default_subfolder = "KHInsider"
 
     def _sanitize(self, name, is_album=False):
         name = unquote(name)
@@ -24,30 +48,25 @@ class KHInsiderProvider(BaseProvider):
         return re.sub(r'[\\/*?:"<>|]', "", name).replace(" ", "_")
 
     def search(self, query):
-        res = _scraper.get(
+        res = _get(
             f"https://downloads.khinsider.com/search?search={query.replace(' ', '+')}",
             timeout=15
         )
         res.raise_for_status()
         soup = BeautifulSoup(res.text, "html.parser")
         results = []
-        
+
         for row in soup.select(".albumList tr"):
-            # Find all links in the row to avoid hardcoded column indexes
             links = row.find_all("a", href=True)
             album_link = None
-            
-            # Find the link that belongs to an album and actually has text content
             for a in links:
                 if "/game-soundtracks/album/" in a["href"] and a.text.strip():
                     album_link = a
                     break
-            
             if album_link:
                 url = album_link["href"]
                 if not url.startswith("http"):
                     url = f"https://downloads.khinsider.com{url}"
-                    
                 results.append({
                     "name": album_link.text.strip(),
                     "url": url,
@@ -61,7 +80,7 @@ class KHInsiderProvider(BaseProvider):
 
         yield {"line": "Analyzing album...", "progress": 0}
         try:
-            res = _scraper.get(data.get("url"), timeout=15)
+            res = _get(data.get("url"), timeout=15)
             res.raise_for_status()
             soup = BeautifulSoup(res.text, "html.parser")
 
@@ -86,7 +105,7 @@ class KHInsiderProvider(BaseProvider):
 
             for idx, page_url in enumerate(song_links, 1):
                 page_soup = BeautifulSoup(
-                    _scraper.get(page_url, timeout=15).text, "html.parser"
+                    _get(page_url, timeout=15).text, "html.parser"
                 )
                 audio_links = [
                     a["href"] for a in page_soup.find_all("a", href=True)
@@ -104,7 +123,6 @@ class KHInsiderProvider(BaseProvider):
 
                 yield {"line": f"Track {idx}/{total}: {file_name}", "progress": progress}
 
-                # FIX: Removed the context manager 'with' loop which curl_cffi doesn't support
                 r = _scraper.get(target_url, stream=True, timeout=30)
                 r.raise_for_status()
                 with open(os.path.join(album_path, file_name), "wb") as f:
