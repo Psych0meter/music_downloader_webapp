@@ -1,0 +1,124 @@
+<!--
+  Provider UI template for _skeleton.
+  Rename to <your_id>.html when creating a real provider.
+
+  Globals available in every provider template:
+    Alpine.js  x-data / x-model / @click / x-show / x-text / $dispatch / $nextTick
+    Tailwind   all utility classes (via CDN)
+
+  To trigger a download:
+    $dispatch('start-download', { provider: 'YOUR_ID', payload: { ...formValues } })
+
+  Naming convention: keep the Alpine state function name unique across all providers.
+  Use <id>State() — e.g. khState(), ocrState(), skeletonState().
+-->
+<div x-data="skeletonState()">
+
+    <!-- ── Info panel (optional — remove if not needed) ───────────────────── -->
+    <template x-if="info">
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
+                <span class="block text-xs text-slate-400 uppercase font-bold mb-1">My Stat</span>
+                <span class="text-xl font-mono text-indigo-400" x-text="info.my_stat ?? '—'"></span>
+            </div>
+        </div>
+    </template>
+
+    <!-- ── Input form ─────────────────────────────────────────────────────── -->
+    <div class="flex flex-col gap-4 mb-6 bg-slate-800 p-4 rounded-xl border border-slate-700">
+
+        <!-- Search / URL input (remove for ID-range providers) -->
+        <input type="text" x-model="query"
+               placeholder="Search or paste URL..."
+               class="bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none">
+
+        <!-- Save-to-folder override -->
+        <div class="relative">
+            <input type="text" x-model="folder"
+                   class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none text-sm text-emerald-400">
+            <span class="absolute -top-2 left-2 px-1 bg-slate-800 text-[10px] text-slate-500">Folder</span>
+        </div>
+    </div>
+
+    <!-- ── Action button ──────────────────────────────────────────────────── -->
+    <button @click="act"
+            :disabled="loading"
+            class="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 py-2 rounded-lg font-bold mb-6">
+        <span x-show="!loading">Download</span>
+        <span x-show="loading">Working...</span>
+    </button>
+
+    <!-- ── Search results (remove for ID-range providers) ─────────────────── -->
+    <template x-if="results.length > 0">
+        <div class="bg-slate-800 rounded-xl overflow-hidden border border-slate-700">
+            <table class="w-full text-left">
+                <tbody class="divide-y divide-slate-700">
+                    <template x-for="res in results" :key="res.url">
+                        <tr class="hover:bg-slate-700/30">
+                            <td class="p-4">
+                                <div class="font-medium" x-text="res.name"></div>
+                                <a :href="res.url" target="_blank"
+                                   class="text-[10px] text-blue-400 hover:underline">🔗 Open source</a>
+                            </td>
+                            <td class="p-4 text-right">
+                                <button @click="$dispatch('start-download', {
+                                            provider: '_skeleton',
+                                            payload: { url: res.url, folder: folder }
+                                        })"
+                                        class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg text-xs font-bold">
+                                    Download
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </template>
+
+</div>
+
+<script>
+function skeletonState() {
+    return {
+        query:   '',
+        folder:  '',
+        results: [],
+        loading: false,
+        info:    null,
+
+        async init() {
+            // Load provider info (stats, default path, etc.)
+            const res = await fetch('/api/info/_skeleton');
+            this.info = await res.json();
+            this.folder = this.info.default_path ?? '';
+        },
+
+        async act() {
+            if (!this.query) return;
+
+            // Direct URL — skip search and download immediately
+            if (this.query.startsWith('http')) {
+                this.$dispatch('start-download', {
+                    provider: '_skeleton',
+                    payload: { url: this.query, folder: this.folder }
+                });
+                return;
+            }
+
+            // Search first, then let the user pick from results
+            this.loading = true;
+            try {
+                const r = await fetch('/api/search/_skeleton', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: this.query })
+                });
+                this.results = (await r.json()).results ?? [];
+            } finally {
+                this.loading = false;
+            }
+        }
+    };
+}
+</script>
