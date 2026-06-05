@@ -1,0 +1,29 @@
+{
+  "name": "Python Web App Dev Env",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  
+  // Customizes settings and installs extensions inside the Codespace
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.linting.enabled": false, // Disable old linters
+        "editor.formatOnSave": true,
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff"
+        },
+        "[html]": {
+          "editor.defaultFormatter": "biati-digital.djlint"
+        }
+      },
+      "extensions": [
+        "charliermarsh.ruff",      // Ruff extension for instant linting
+        "biati-digital.djlint",    // DjLint extension for templates
+        "ms-python.python",        // Core Python extension
+        "ms-python.vscode-pylance" // Intellisense
+      ]
+    }
+  },
+
+  // Installs the tools automatically when the container is created
+  "postCreateCommand": "pip install ruff djlint"
+}

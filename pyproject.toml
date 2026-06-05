@@ -1,0 +1,13 @@
+[tool.ruff]
+# Target Python version
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+# Enable Pyflakes (F), Pycodestyle (E, W), Isort (I), and Bandit Security (S)
+select = ["E", "F", "W", "I", "S"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore security warnings in tests
+"tests/*" = ["S101"]
