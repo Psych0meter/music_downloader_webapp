@@ -1,12 +1,15 @@
 [tool.ruff]
 # Target Python version
 target-version = "py311"
-line-length = 88
+line-length = 120
 
 [tool.ruff.lint]
 # Enable Pyflakes (F), Pycodestyle (E, W), Isort (I), and Bandit Security (S)
 select = ["E", "F", "W", "I", "S"]
-ignore = []
+# S104 flags app.run(host="0.0.0.0"). But for a local web app running in 
+# a GitHub Codespace or a Docker container, 0.0.0.0 is MANDATORY to allow port forwarding!
+# We will explicitly ignore S104 here.
+ignore = ["S104"]
 
 [tool.ruff.lint.per-file-ignores]
 # Ignore security warnings in tests

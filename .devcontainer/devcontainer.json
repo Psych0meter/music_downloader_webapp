@@ -4,11 +4,11 @@
   "features": {
     "ghcr.io/devcontainers/features/git-lfs:1": {}
   },
-  // Customizes settings and installs extensions inside the Codespace
   "customizations": {
     "vscode": {
       "settings": {
-        "python.linting.enabled": false, // Disable old linters
+        "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+        "python.linting.enabled": false,
         "editor.formatOnSave": true,
         "[python]": {
           "editor.defaultFormatter": "charliermarsh.ruff"
@@ -18,13 +18,13 @@
         }
       },
       "extensions": [
-        "charliermarsh.ruff", // Ruff extension for instant linting
-        "biati-digital.djlint", // DjLint extension for templates
-        "ms-python.python", // Core Python extension
-        "ms-python.vscode-pylance" // Intellisense
+        "charliermarsh.ruff",
+        "biati-digital.djlint",
+        "ms-python.python",
+        "ms-python.vscode-pylance"
       ]
     }
   },
-  // Installs the tools automatically when the container is created
-  "postCreateCommand": "pip install ruff djlint"
+  // This creates the venv, activates it, and installs everything automatically on creation
+  "postCreateCommand": "python3 -m venv .venv && .venv/bin/pip install --upgrade pip && .venv/bin/pip install -r requirements.txt ruff djlint"
 }
