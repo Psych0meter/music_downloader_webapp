@@ -1,6 +1,6 @@
+import os
 from abc import ABC, abstractmethod
 from typing import Any, Generator
-import os
 
 # ---------------------------------------------------------------------------
 # Shared constants available to all providers
@@ -128,7 +128,9 @@ class BaseProvider(ABC):
     # -------------------------------------------------------------------------
 
     @abstractmethod
-    def download(self, payload: dict[str, Any]) -> Generator[dict[str, Any], None, None]:
+    def download(
+        self, payload: dict[str, Any]
+    ) -> Generator[dict[str, Any], None, None]:
         """
         Download the item described by *payload* and yield progress events.
 

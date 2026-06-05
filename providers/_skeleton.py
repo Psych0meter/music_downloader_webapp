@@ -1,6 +1,6 @@
-import os
 from typing import Any, Generator
-from providers.base import BaseProvider, HEADERS
+
+from providers.base import BaseProvider  #, HEADERS
 
 # Uncomment the import that suits your target site:
 #
@@ -64,7 +64,7 @@ class SkeletonProvider(BaseProvider):
         The FINAL event must have progress == 100.
         Unhandled exceptions are caught by the app and sent as a final error event.
         """
-        dest = self.get_path(payload.get("folder", ""))
+        # dest = self.get_path(payload.get("folder", ""))
 
         yield {"line": "Starting download...", "progress": 0}
 
@@ -77,4 +77,7 @@ class SkeletonProvider(BaseProvider):
         #         f.write(chunk)
         # ----------------------------------------------------------------------
 
-        yield {"line": "<span class='text-emerald-400'>=== FINISHED ===</span>", "progress": 100}
+        yield {
+            "line": "<span class='text-emerald-400'>=== FINISHED ===</span>",
+            "progress": 100,
+        }
