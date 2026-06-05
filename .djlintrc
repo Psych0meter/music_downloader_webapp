@@ -1,5 +1,5 @@
 {
-    "profile": "jinja", // Change to "django" if using Django
+    "profile": "jinja",
     "indent": 4,
     "format_attribute_value_quotes": "double",
     "ignored_rules": "H006,H021",
