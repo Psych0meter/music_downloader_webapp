@@ -27,6 +27,7 @@ Open `providers/mysource.py` and fill in:
 - `id` — short unique string, **must match the filename** (`mysource.py` → `id = "mysource"`)
 - `name` — display name shown in the tab bar
 - `description` — one-line description
+- `default_subfolder` — optional subfolder inside `DOWNLOAD_DIR` for this provider's downloads (e.g. `"KHInsider"` → saves to `DOWNLOAD_DIR/KHInsider/`). The user can still override it from the UI.
 - `search()` — optional, for search-based providers (KHInsider-style)
 - `download()` — required, streams progress events to the UI
 
@@ -76,10 +77,12 @@ User enters IDs or a range → download starts directly.
 | Rule | Why |
 |------|-----|
 | `id` must match the filename | `app.py` maps `provider.id` → `templates/providers/<id>.html` |
+| Files starting with `_` are ignored | Keeps `_skeleton.py` out of the live app — use it as a template only |
 | Final `download()` event must have `progress: 100` | The UI progress bar relies on this to stop |
 | Alpine state function must be uniquely named | `khState()`, `ocrState()`, `skeletonState()` — never `state()` |
 | Dispatch `start-download` with `provider` + `payload` | The main app wires this to the SSE download endpoint |
-| `get_path(subfolder)` for all file I/O | Respects `DOWNLOAD_DIR` env var; creates dir if needed |
+| `get_path(subfolder)` for all file I/O | Respects `DOWNLOAD_DIR` env var and `default_subfolder`; creates dir if needed |
+| Set `default_subfolder` to organise downloads | e.g. `default_subfolder = "KHInsider"` → saves to `DOWNLOAD_DIR/KHInsider/` |
 
 ---
 

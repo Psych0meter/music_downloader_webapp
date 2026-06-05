@@ -1,38 +1,40 @@
 <!--
-  Provider UI template for _skeleton.
-  Rename to <your_id>.html when creating a real provider.
+  Provider UI skeleton — copy to templates/providers/<your_id>.html
+  Files starting with _ are ignored by the app (template only).
 
-  Globals available in every provider template:
-    Alpine.js  x-data / x-model / @click / x-show / x-text / $dispatch / $nextTick
-    Tailwind   all utility classes (via CDN)
+  Globals available:
+    Alpine.js  — x-data / x-model / @click / x-show / x-text / $dispatch
+    Tailwind   — all utility classes
 
   To trigger a download:
     $dispatch('start-download', { provider: 'YOUR_ID', payload: { ...formValues } })
 
-  Naming convention: keep the Alpine state function name unique across all providers.
-  Use <id>State() — e.g. khState(), ocrState(), skeletonState().
+  The folder input is pre-filled from default_subfolder defined in the Python
+  provider class — no hardcoding needed in the template.
+
+  Naming: keep the Alpine state function unique — use <id>State().
 -->
 <div x-data="skeletonState()">
 
-    <!-- ── Info panel (optional — remove if not needed) ───────────────────── -->
-    <template x-if="info">
-        <div class="grid grid-cols-2 gap-4 mb-6">
-            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
-                <span class="block text-xs text-slate-400 uppercase font-bold mb-1">My Stat</span>
-                <span class="text-xl font-mono text-indigo-400" x-text="info.my_stat ?? '—'"></span>
-            </div>
+    <!-- ── Optional info panel (remove if not needed) ─────────────────────── -->
+    <!-- Example: show a stat fetched from /api/info/_skeleton
+    <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
+            <span class="block text-xs text-slate-400 uppercase font-bold mb-1">My Stat</span>
+            <span class="text-xl font-mono text-indigo-400" x-text="info.my_stat ?? '—'"></span>
         </div>
-    </template>
+    </div>
+    -->
 
     <!-- ── Input form ─────────────────────────────────────────────────────── -->
     <div class="flex flex-col gap-4 mb-6 bg-slate-800 p-4 rounded-xl border border-slate-700">
 
-        <!-- Search / URL input (remove for ID-range providers) -->
+        <!-- Search / URL input — remove for ID/range-based providers -->
         <input type="text" x-model="query"
                placeholder="Search or paste URL..."
                class="bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none">
 
-        <!-- Save-to-folder override -->
+        <!-- Folder override — pre-filled from Python's default_subfolder -->
         <div class="relative">
             <input type="text" x-model="folder"
                    class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none text-sm text-emerald-400">
@@ -41,14 +43,13 @@
     </div>
 
     <!-- ── Action button ──────────────────────────────────────────────────── -->
-    <button @click="act"
-            :disabled="loading"
+    <button @click="act" :disabled="loading"
             class="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 py-2 rounded-lg font-bold mb-6">
         <span x-show="!loading">Download</span>
         <span x-show="loading">Working...</span>
     </button>
 
-    <!-- ── Search results (remove for ID-range providers) ─────────────────── -->
+    <!-- ── Search results (remove for ID/range providers) ─────────────────── -->
     <template x-if="results.length > 0">
         <div class="bg-slate-800 rounded-xl overflow-hidden border border-slate-700">
             <table class="w-full text-left">
@@ -88,16 +89,17 @@ function skeletonState() {
         info:    null,
 
         async init() {
-            // Load provider info (stats, default path, etc.)
+            // Fetch provider metadata from the Python class via the API.
+            // default_subfolder is defined in the .py file — no hardcoding here.
             const res = await fetch('/api/info/_skeleton');
             this.info = await res.json();
-            this.folder = this.info.default_path ?? '';
+            this.folder = this.info.default_subfolder ?? '';
         },
 
         async act() {
             if (!this.query) return;
 
-            // Direct URL — skip search and download immediately
+            // Direct URL → skip search, download immediately
             if (this.query.startsWith('http')) {
                 this.$dispatch('start-download', {
                     provider: '_skeleton',
@@ -106,7 +108,7 @@ function skeletonState() {
                 return;
             }
 
-            // Search first, then let the user pick from results
+            // Search first, let user pick from results
             this.loading = true;
             try {
                 const r = await fetch('/api/search/_skeleton', {

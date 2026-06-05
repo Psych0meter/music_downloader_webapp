@@ -52,6 +52,10 @@ class BaseProvider(ABC):
     id: str = ""
     name: str = ""
     description: str = ""
+    # Optional: set this in your provider to save downloads into a subfolder of
+    # DOWNLOAD_DIR by default.  The user can still override it from the UI.
+    # Example:  default_subfolder = "KHInsider"
+    default_subfolder: str = ""
 
     # -------------------------------------------------------------------------
     # Helpers
@@ -62,11 +66,24 @@ class BaseProvider(ABC):
         Return the absolute download directory for this provider, creating it
         if necessary.
 
-        Root is taken from the ``DOWNLOAD_DIR`` environment variable
-        (default: ``/downloads``). *subfolder* is appended when given.
+        Resolution order:
+          1. ``subfolder`` argument (from the UI folder input — treated as a
+             subfolder *name*, never a full path)
+          2. ``self.default_subfolder`` class attribute
+          3. ``DOWNLOAD_DIR`` root (default: ``/downloads``)
+
+        The subfolder value is sanitised: leading slashes and path separators
+        are stripped so a user cannot accidentally escape DOWNLOAD_DIR.
         """
         base = os.environ.get("DOWNLOAD_DIR", "/downloads")
-        path = os.path.join(base, subfolder) if subfolder else base
+        # Use UI input if provided, else fall back to the provider default
+        effective = subfolder.strip() or self.default_subfolder.strip()
+        if effective:
+            # Strip any leading separators — treat it as a name, not a path
+            effective = effective.lstrip("/\\")
+            path = os.path.join(base, effective)
+        else:
+            path = base
         os.makedirs(path, exist_ok=True)
         return path
 
@@ -90,6 +107,7 @@ class BaseProvider(ABC):
             "supports_search": type(self).search is not BaseProvider.search,
             # Convenience: the frontend can pre-fill the folder input from this.
             "default_path": os.environ.get("DOWNLOAD_DIR", "/downloads"),
+            "default_subfolder": self.default_subfolder,
         }
 
     def search(self, query: str) -> list[dict[str, Any]]:

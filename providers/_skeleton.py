@@ -20,6 +20,9 @@ class SkeletonProvider(BaseProvider):
     id = "_skeleton"
     name = "My Source"
     description = "Short description shown in the provider tab"
+    # Optional: saves downloads to DOWNLOAD_DIR/My Source/ by default.
+    # The user can still override it from the folder input in the UI.
+    default_subfolder = "My Source"
 
     # -------------------------------------------------------------------------
     # OPTIONAL — delete this method for ID/range-based providers (like OCRemix)
@@ -56,7 +59,7 @@ class SkeletonProvider(BaseProvider):
 
         Each yielded dict must contain:
           "line"     (str) — log message shown in the UI (HTML allowed)
-          "progress" (int) — completion percentage 0–100
+          "progress" (int) — completion percentage 0-100
 
         The FINAL event must have progress == 100.
         Unhandled exceptions are caught by the app and sent as a final error event.
