@@ -52,7 +52,7 @@ def load_providers() -> None:
     os.makedirs(providers_dir, exist_ok=True)
 
     for filename in sorted(os.listdir(providers_dir)):
-        if not filename.endswith(".py") or filename in ("__init__.py", "base.py"):
+        if not filename.endswith(".py") or filename in ("__init__.py", "base.py") or filename.startswith("_"):
             continue
 
         module_name = filename[:-3]
