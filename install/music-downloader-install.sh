@@ -65,7 +65,20 @@ msg_ok "Created and Enabled Service"
 # Lifecycle hooks from community-scripts build.func:
 # - motd_ssh  : sets up SSH MOTD and auto-login (fixes Proxmox console prompt)
 # - customize : configures getty autologin (empty root password = no login prompt)
+#               also writes /usr/bin/update — but with the wrong URL (community-scripts
+#               repo + lowercased APP name). We overwrite it below with the correct URL.
 # - cleanup_lxc: cleans up temp files and finalises container setup
 motd_ssh
 customize
+
+# Fix /usr/bin/update: customize() generates this file pointing to the community-scripts
+# repo using the lowercased APP name ("musicdownloader"), which doesn't exist there.
+# Overwrite it with the correct URL pointing to this project.
+cat <<'EOF' >/usr/bin/update
+#!/usr/bin/env bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Psych0meter/music_downloader_webapp/main/ct/music-downloader.sh)"
+EOF
+chmod +x /usr/bin/update
+msg_ok "Update Script Configured"
+
 cleanup_lxc
