@@ -45,9 +45,18 @@ function update_script() {
 
   msg_info "Updating ${APP}"
   cd /opt/music-downloader
-  $STD git pull
+
+  # Read the branch that was originally installed, fall back to main.
+  # This handles the case where the container was installed from a branch
+  # that no longer exists, or was renamed — bare "git pull" would fail.
+  INSTALLED_BRANCH=$(cat /opt/music-downloader_version.txt 2>/dev/null | cut -d'@' -f1)
+  INSTALLED_BRANCH="${INSTALLED_BRANCH:-main}"
+
+  $STD git fetch origin
+  $STD git checkout "${INSTALLED_BRANCH}"
+  $STD git reset --hard "origin/${INSTALLED_BRANCH}"
   $STD /opt/music-downloader/venv/bin/pip install --upgrade -r requirements.txt
-  msg_ok "Updated ${APP}"
+  msg_ok "Updated ${APP} (branch: ${INSTALLED_BRANCH})"
 
   msg_info "Starting Service"
   systemctl start music-downloader
