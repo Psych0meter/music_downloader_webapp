@@ -1,18 +1,22 @@
 <div x-data="khState()">
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 bg-slate-800 p-4 rounded-xl border border-slate-700">
-        <input type="text" x-model="q" placeholder="Search or URL..." class="md:col-span-2 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none">
-        
+        <input type="text" x-model="q" placeholder="Search or URL..."
+               class="md:col-span-2 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none">
+
         <div class="relative">
-            <input type="text" x-model="folder" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none text-sm text-emerald-400">
+            <input type="text" x-model="folder"
+                   class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none text-sm text-emerald-400">
             <span class="absolute -top-2 left-2 px-1 bg-slate-800 text-[10px] text-slate-500">Folder</span>
         </div>
-        
+
         <select x-model="fmt" class="bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none text-sm">
-            <option value=".mp3">MP3</option><option value=".flac">FLAC</option>
+            <option value=".mp3">MP3</option>
+            <option value=".flac">FLAC</option>
         </select>
     </div>
-    
-    <button @click="doSearch" :disabled="loading" class="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded-lg font-bold mb-6">
+
+    <button @click="doSearch" :disabled="loading"
+            class="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 py-2 rounded-lg font-bold mb-6">
         <span x-show="!loading" x-text="q.startsWith('http') ? 'Direct Download' : 'Search Albums'"></span>
         <span x-show="loading">Working...</span>
     </button>
@@ -25,10 +29,14 @@
                         <tr class="hover:bg-slate-700/30">
                             <td class="p-4">
                                 <div class="font-medium" x-text="res.name"></div>
-                                <a :href="res.url" target="_blank" class="text-[10px] text-blue-400 hover:underline">🔗 Check on KHInsider</a>
+                                <a :href="res.url" target="_blank"
+                                   class="text-[10px] text-blue-400 hover:underline">🔗 Check on KHInsider</a>
                             </td>
                             <td class="p-4 text-right">
-                                <button @click="$dispatch('start-download', {provider: 'khinsider', payload: {url: res.url, format: fmt, folder: folder}})" class="bg-emerald-600 px-4 py-2 rounded-lg text-xs font-bold">Download</button>
+                                <button @click="$dispatch('start-download', {provider: 'khinsider', payload: {url: res.url, format: fmt, folder: folder}})"
+                                        class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg text-xs font-bold">
+                                    Download
+                                </button>
                             </td>
                         </tr>
                     </template>
@@ -37,21 +45,35 @@
         </div>
     </template>
 </div>
+
 <script>
 function khState() {
     return {
         q: '', fmt: '.flac', folder: '', results: [], loading: false,
+
         async init() {
-            const res = await fetch('/api/info/khinsider');
-            this.folder = (await res.json()).default_path;
+            // Load default_subfolder from the Python provider class.
+            // Falls back to empty string if not set (saves to DOWNLOAD_DIR root).
+            const info = await (await fetch('/api/info/khinsider')).json();
+            this.folder = info.default_subfolder ?? '';
         },
+
         async doSearch() {
-            if (this.q.startsWith('http')) { this.$dispatch('start-download', {provider: 'khinsider', payload: {url: this.q, format: this.fmt, folder: this.folder}}); return; }
+            if (this.q.startsWith('http')) {
+                this.$dispatch('start-download', {provider: 'khinsider', payload: {url: this.q, format: this.fmt, folder: this.folder}});
+                return;
+            }
             this.loading = true;
             try {
-                const r = await fetch('/api/search/khinsider', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:this.q})});
+                const r = await fetch('/api/search/khinsider', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({query: this.q})
+                });
                 this.results = (await r.json()).results || [];
-            } finally { this.loading = false; }
+            } finally {
+                this.loading = false;
+            }
         }
     }
 }

@@ -16,29 +16,44 @@
 
     <div class="flex flex-col gap-4 mb-6 bg-slate-800 p-4 rounded-xl border border-slate-700">
         <div class="flex gap-4">
-            <input type="text" x-model="ids" placeholder="IDs (e.g. 100-120)" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none">
+            <input type="text" x-model="ids" placeholder="IDs (e.g. 100-120)"
+                   class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none">
             <div class="w-1/3 relative">
-                <input type="text" x-model="folder" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none text-emerald-400">
+                <input type="text" x-model="folder"
+                       class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none text-emerald-400">
                 <span class="absolute -top-2 left-2 px-1 bg-slate-800 text-[10px] text-slate-500">Folder</span>
             </div>
         </div>
         <div class="flex justify-between items-center">
-            <label class="flex items-center text-xs text-slate-400"><input type="checkbox" x-model="miss" class="mr-2"> Missing Only</label>
-            <button @click="$dispatch('start-download', {provider: 'ocremix', payload: {ids: ids, missing_only: miss, folder: folder}})" class="bg-indigo-600 px-6 py-2 rounded-lg font-bold">Start</button>
+            <label class="flex items-center text-xs text-slate-400">
+                <input type="checkbox" x-model="miss" class="mr-2"> Missing Only
+            </label>
+            <button @click="$dispatch('start-download', {provider: 'ocremix', payload: {ids: ids, missing_only: miss, folder: folder}})"
+                    class="bg-indigo-600 hover:bg-indigo-500 px-6 py-2 rounded-lg font-bold">
+                Start
+            </button>
         </div>
     </div>
 </div>
+
 <script>
 function ocrState() {
     return {
-        ids: '', miss: false, folder: '', stats: {latest_online: '...', last_downloaded: '...'},
-        async init() { await this.getStats(); },
+        ids: '', miss: false, folder: '',
+        stats: {latest_online: '...', last_downloaded: '...'},
+
+        async init() {
+            await this.getStats();
+        },
+
         async getStats() {
             const r = await fetch('/api/info/ocremix');
             const d = await r.json();
-            this.stats.latest_online = `${String(d.latest_online).padStart(5, '0')}`;
-            this.stats.last_downloaded = `${String(d.last_downloaded).padStart(5, '0')}`;
-            this.folder = d.default_path;
+            this.stats.latest_online = String(d.latest_online ?? '?').padStart(5, '0');
+            this.stats.last_downloaded = String(d.last_downloaded ?? '?').padStart(5, '0');
+            // Load default_subfolder from the Python provider class.
+            // Falls back to empty string if not set (saves to DOWNLOAD_DIR root).
+            this.folder = d.default_subfolder ?? '';
         }
     }
 }
