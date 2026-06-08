@@ -2,40 +2,41 @@
     <div class="grid grid-cols-2 gap-4 mb-6">
         <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
             <span class="block text-xs text-slate-400 uppercase font-bold mb-1">Latest Online</span>
-            <span class="text-xl font-mono text-indigo-400" x-text="stats.latest_online">...</span>
+            <span class="text-xl font-mono text-indigo-400"
+                  x-text="stats.latest_online">...</span>
         </div>
         <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
             <span class="block text-xs text-slate-400 uppercase font-bold mb-1">Local ID</span>
-            <span class="text-xl font-mono text-emerald-400" x-text="stats.last_downloaded">...</span>
+            <span class="text-xl font-mono text-emerald-400"
+                  x-text="stats.last_downloaded">...</span>
         </div>
     </div>
-
     <div class="mb-6 bg-indigo-900/30 p-4 rounded-lg border border-indigo-500/30 text-xs text-indigo-200">
         <strong>Formats:</strong> Range (100-110), List (1,5,10), or Mixed (1-5,10).
     </div>
-
     <div class="flex flex-col gap-4 mb-6 bg-slate-800 p-4 rounded-xl border border-slate-700">
         <div class="flex gap-4">
-            <input type="text" x-model="ids" placeholder="IDs (e.g. 100-120)"
+            <input type="text"
+                   x-model="ids"
+                   placeholder="IDs (e.g. 100-120)"
                    class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none">
             <div class="w-1/3 relative">
-                <input type="text" x-model="folder"
+                <input type="text"
+                       x-model="folder"
                        class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 outline-none text-emerald-400">
                 <span class="absolute -top-2 left-2 px-1 bg-slate-800 text-[10px] text-slate-500">Folder</span>
             </div>
         </div>
         <div class="flex justify-between items-center">
             <label class="flex items-center text-xs text-slate-400">
-                <input type="checkbox" x-model="miss" class="mr-2"> Missing Only
+                <input type="checkbox" x-model="miss" class="mr-2">
+                Missing Only
             </label>
             <button @click="$dispatch('start-download', {provider: 'ocremix', payload: {ids: ids, missing_only: miss, folder: folder}})"
-                    class="bg-indigo-600 hover:bg-indigo-500 px-6 py-2 rounded-lg font-bold">
-                Start
-            </button>
+                    class="bg-indigo-600 hover:bg-indigo-500 px-6 py-2 rounded-lg font-bold">Start</button>
         </div>
     </div>
 </div>
-
 <script>
 function ocrState() {
     return {

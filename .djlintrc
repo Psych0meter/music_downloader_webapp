@@ -1,0 +1,7 @@
+{
+    "profile": "jinja",
+    "indent": 4,
+    "format_attribute_value_quotes": "double",
+    "ignored_rules": "H006,H021",
+    "blank_line_after_tag": "load,extends,include"
+}

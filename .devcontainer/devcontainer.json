@@ -1,0 +1,30 @@
+{
+  "name": "Python Web App Dev Env",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "features": {
+    "ghcr.io/devcontainers/features/git-lfs:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+        "python.linting.enabled": false,
+        "editor.formatOnSave": true,
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff"
+        },
+        "[html]": {
+          "editor.defaultFormatter": "biati-digital.djlint"
+        }
+      },
+      "extensions": [
+        "charliermarsh.ruff",
+        "biati-digital.djlint",
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ]
+    }
+  },
+  // This creates the venv, activates it, and installs everything automatically on creation
+  "postCreateCommand": "python3 -m venv .venv && .venv/bin/pip install --upgrade pip && .venv/bin/pip install -r requirements.txt ruff djlint"
+}

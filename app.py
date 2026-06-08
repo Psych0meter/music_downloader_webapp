@@ -1,19 +1,29 @@
-import os
-from dotenv import load_dotenv
-
-load_dotenv()  # loads .env into os.environ before anything else reads it
-import json
-import logging
-import sys
 import importlib.util
 import inspect
+import json
+import logging
+import os
+import sys
 from collections import deque
-from flask import Flask, render_template, request, Response, stream_with_context, jsonify
+
+from dotenv import load_dotenv
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    render_template,
+    request,
+    stream_with_context,
+)
+
 from providers.base import BaseProvider
+
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Logging — dual handler: stdout + in-memory ring buffer for the web log view
 # ---------------------------------------------------------------------------
+
 
 class WebLogHandler(logging.Handler):
     def __init__(self, capacity=200):
