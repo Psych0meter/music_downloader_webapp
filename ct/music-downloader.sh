@@ -39,9 +39,31 @@ function update_script() {
     exit
   fi
 
+  msg_info "Updating Container OS"
+  apt_update_safe
+  $STD apt-get -o Dpkg::Options::="--force-confold" -y dist-upgrade
+  msg_ok "Updated Container OS"
+
   msg_info "Stopping Service"
   systemctl stop music-downloader
   msg_ok "Stopped Service"
+
+  # The OS dist-upgrade above can bump the system python3 minor version
+  # (e.g. 3.13 -> 3.14) and remove the old versioned binary. The venv's
+  # bin/python3 is a symlink pinned to that exact versioned binary, so it
+  # goes dangling and every venv/bin/* shim (including pip) breaks. Detect
+  # that here and rebuild the venv before we try to use it below, instead
+  # of letting pip install fail mid-update.
+  msg_info "Checking Python Environment"
+  if [[ ! -x /opt/music-downloader/venv/bin/python3 ]] || ! /opt/music-downloader/venv/bin/python3 --version >/dev/null 2>&1; then
+    msg_warn "Virtual environment is broken (system Python was likely upgraded) - rebuilding"
+    rm -rf /opt/music-downloader/venv
+    $STD python3 -m venv /opt/music-downloader/venv
+    $STD /opt/music-downloader/venv/bin/pip install --upgrade pip
+    msg_ok "Rebuilt Python Virtual Environment"
+  else
+    msg_ok "Python Environment OK"
+  fi
 
   msg_info "Updating ${APP}"
   cd /opt/music-downloader
