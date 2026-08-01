@@ -1,6 +1,8 @@
+import html
 import os
 import re
-from urllib.parse import unquote
+import threading
+from urllib.parse import unquote, urlparse
 
 from bs4 import BeautifulSoup
 from curl_cffi import requests
@@ -11,23 +13,43 @@ from providers.base import BaseProvider
 # If the first is blocked by Cloudflare, the session rotates to the next.
 _TARGETS = ["chrome146", "chrome145", "chrome136", "firefox147", "chrome124"]
 
+# Only these hosts may be fetched — closes off the "Direct Download" URL box
+# (any string starting with "http") from being used as an open SSRF proxy.
+_ALLOWED_HOST = "downloads.khinsider.com"
+
+# Sessions are cached per-thread rather than in a single shared global, so
+# concurrent requests (two downloads, or a search racing a download) can't
+# stomp on each other's fingerprint-rotation state.
+_local = threading.local()
+
 
 def _make_session(target: str) -> requests.Session:
     return requests.Session(impersonate=target)
 
 
-_scraper = _make_session(_TARGETS[0])
+def _is_allowed_url(url: str) -> bool:
+    """Restrict outbound requests to the KHInsider domain (and subdomains)."""
+    if not url:
+        return False
+    try:
+        host = (urlparse(url).hostname or "").lower()
+    except ValueError:
+        return False
+    return host == _ALLOWED_HOST or host.endswith(f".{_ALLOWED_HOST}")
 
 
 def _get(url: str, **kwargs) -> requests.Response:
     """
     GET with automatic fingerprint rotation on 403.
-    Tries each target in _TARGETS before giving up.
+    Tries each target in _TARGETS before giving up. The active session is
+    stored in thread-local storage so it can be reused by _local.session
+    for the follow-up file download without racing other threads.
     """
-    global _scraper
+    r = None
     for target in _TARGETS:
-        _scraper = _make_session(target)
-        r = _scraper.get(url, **kwargs)
+        session = _make_session(target)
+        _local.session = session
+        r = session.get(url, **kwargs)
         if r.status_code != 403:
             return r
     # Return last response (caller will raise_for_status)
@@ -83,10 +105,19 @@ class KHInsiderProvider(BaseProvider):
         preferred_ext = data.get("format", ".flac")
         custom_folder = data.get("folder", "")
         base_path = self.get_path(custom_folder)
+        url = data.get("url", "")
 
         yield {"line": "Analyzing album...", "progress": 0}
+
+        if not _is_allowed_url(url):
+            yield {
+                "line": f"<span class='text-red-400'>Error: URL must be on {_ALLOWED_HOST}</span>",
+                "progress": 100,
+            }
+            return
+
         try:
-            res = _get(data.get("url"), timeout=15)
+            res = _get(url, timeout=15)
             res.raise_for_status()
             soup = BeautifulSoup(res.text, "html.parser")
 
@@ -128,11 +159,11 @@ class KHInsiderProvider(BaseProvider):
                 progress = int((idx / total) * 100)
 
                 yield {
-                    "line": f"Track {idx}/{total}: {file_name}",
+                    "line": f"Track {idx}/{total}: {html.escape(file_name)}",
                     "progress": progress,
                 }
 
-                r = _scraper.get(target_url, stream=True, timeout=30)
+                r = _local.session.get(target_url, stream=True, timeout=30)
                 r.raise_for_status()
                 with open(os.path.join(album_path, file_name), "wb") as f:
                     for chunk in r.iter_content(65536):
@@ -145,6 +176,6 @@ class KHInsiderProvider(BaseProvider):
 
         except Exception as e:
             yield {
-                "line": f"<span class='text-red-400'>Error: {str(e)}</span>",
+                "line": f"<span class='text-red-400'>Error: {html.escape(str(e))}</span>",
                 "progress": 100,
             }

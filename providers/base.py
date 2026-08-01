@@ -72,16 +72,26 @@ class BaseProvider(ABC):
           2. ``self.default_subfolder`` class attribute
           3. ``DOWNLOAD_DIR`` root (default: ``/downloads``)
 
-        The subfolder value is sanitised: leading slashes and path separators
-        are stripped so a user cannot accidentally escape DOWNLOAD_DIR.
+        The resulting path is resolved and verified to still live inside
+        ``DOWNLOAD_DIR``. Earlier versions only stripped *leading* slashes,
+        which did not stop ``..`` components (e.g. ``../../etc``) from
+        escaping the download root — this raises ``ValueError`` instead of
+        silently writing outside ``DOWNLOAD_DIR``.
         """
-        base = os.environ.get("DOWNLOAD_DIR", "/downloads")
+        base = os.path.abspath(os.environ.get("DOWNLOAD_DIR", "/downloads"))
         # Use UI input if provided, else fall back to the provider default
         effective = subfolder.strip() or self.default_subfolder.strip()
         if effective:
             # Strip any leading separators — treat it as a name, not a path
             effective = effective.lstrip("/\\")
-            path = os.path.join(base, effective)
+            candidate = os.path.abspath(os.path.join(base, effective))
+            # Reject anything that resolves outside DOWNLOAD_DIR (e.g. a
+            # folder value containing "..") instead of trying to sanitise
+            # it further — an explicit error is safer than a silent partial
+            # fix.
+            if os.path.commonpath([base, candidate]) != base:
+                raise ValueError(f"Invalid folder {subfolder!r}: escapes DOWNLOAD_DIR")
+            path = candidate
         else:
             path = base
         os.makedirs(path, exist_ok=True)

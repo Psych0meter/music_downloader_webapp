@@ -1,3 +1,4 @@
+import html
 import logging
 import os
 import re
@@ -121,7 +122,7 @@ class OCRemixProvider(BaseProvider):
                 link = self._find_download_link(soup)
                 if link:
                     fname = os.path.basename(link.split("?")[0])  # strip query string if any
-                    yield {"line": f"[{rid}] Downloading: {fname}", "progress": percent}
+                    yield {"line": f"[{rid}] Downloading: {html.escape(fname)}", "progress": percent}
                     r = requests.get(link, headers=HEADERS, stream=True, timeout=30)
                     r.raise_for_status()
                     with open(os.path.join(dest_path, f"{rid} - {fname}"), "wb") as f:
@@ -136,6 +137,6 @@ class OCRemixProvider(BaseProvider):
                     }
             except Exception as e:
                 logger.error(f"OCRemix: Error during {rid} processing: {str(e)}")
-                yield {"line": f"[{rid}] Failed: {str(e)}", "progress": percent}
+                yield {"line": f"[{rid}] Failed: {html.escape(str(e))}", "progress": percent}
             time.sleep(0.5)
         yield {"line": "<b>--- Done ---</b>", "progress": 100}

@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import sys
+import threading
 from collections import deque
 
 from dotenv import load_dotenv
@@ -49,6 +50,13 @@ logger = logging.getLogger("MediaVault")
 app = Flask(__name__)
 
 PROVIDERS: dict[str, BaseProvider] = {}
+
+# Serializes actual download work across requests/threads. Providers like
+# KHInsider keep per-thread scraping sessions, but two downloads racing each
+# other still isn't something we want to allow (duplicate file writes,
+# unpredictable ordering in the log view). Acquired non-blocking so a second
+# request fails fast with a clear message instead of silently queueing.
+download_lock = threading.Lock()
 
 
 def load_providers() -> None:
@@ -155,12 +163,29 @@ def download(provider_id: str):
     payload = request.json or {}
 
     def generate():
+        if not download_lock.acquire(blocking=False):
+            logger.warning("Rejected download for '%s': another download is already running", provider_id)
+            yield (
+                "data: "
+                + json.dumps(
+                    {
+                        "line": "<span class='text-red-400'>"
+                        "Another download is already in progress. Please wait for it to finish."
+                        "</span>",
+                        "progress": 100,
+                    }
+                )
+                + "\n\n"
+            )
+            return
         try:
             for log_data in provider.download(payload):
                 yield f"data: {json.dumps(log_data)}\n\n"
         except Exception as exc:  # noqa: BLE001
             logger.error("Download error in provider '%s': %s", provider_id, exc)
             yield f"data: {json.dumps({'line': f'Critical Error: {exc}', 'progress': 100})}\n\n"
+        finally:
+            download_lock.release()
 
     return Response(
         stream_with_context(generate()),
@@ -180,4 +205,7 @@ def download(provider_id: str):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     debug = os.environ.get("FLASK_DEBUG", "0") == "1"
-    app.run(host="0.0.0.0", port=port, debug=debug)
+    # threaded=True so /api/health, /logs, etc. stay responsive while a
+    # download is streaming — the download_lock above still limits actual
+    # download work to one at a time.
+    app.run(host="0.0.0.0", port=port, debug=debug, threaded=True)
